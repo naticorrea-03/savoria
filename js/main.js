@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Game, sfx, WORLD_ONE_ASSETS } from './game.js?v=2';
 import { LEVELS, WORLDS, buildLevel } from './levels.js?v=2';
 import { createTextureStore } from './core/texture-store.js';
+import { createActiveProgressReporter } from './ui/level-loading.js';
 import { loadSave, writeSave, recordCompletion } from './ui/save-store.js';
 
 const $ = (id) => document.getElementById(id);
@@ -119,7 +120,10 @@ async function startLevel(idx) {
     baseUrl: document.baseURI,
   });
   try {
-    await textures.preload(WORLD_ONE_ASSETS, (loaded, total) => showLoadProgress(loaded / total));
+    await textures.preload(
+      WORLD_ONE_ASSETS,
+      createActiveProgressReporter(startId, () => levelStartId, showLoadProgress),
+    );
   } catch (error) {
     textures.dispose();
     if (startId === levelStartId) hudMsg('Could not load level');
