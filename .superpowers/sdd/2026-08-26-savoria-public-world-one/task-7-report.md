@@ -4,10 +4,12 @@
 
 DONE_WITH_CONCERNS from base commit `aa232c3`.
 
-Planned commit message:
+Task 7 commit messages:
 
 ```text
+feat: polish Pasta Plains progression
 fix: verify Pasta Plains transfers
+docs: correct Pasta Plains verification provenance
 ```
 
 ## Authored Courses
@@ -77,7 +79,7 @@ The deterministic simulator steps `stepPlayerMotion()` at 60 Hz. It reaches stea
 - Required minimum: `0.500` units.
 - Unreachable required jumps: `0`.
 
-The longest fixed gap is Penne Ridge's `6.5` unit run jump. Its measured margin is `2.157` units. Mover analysis solves the exact worst takeoff phase using actual width, travel, period, rise, and landing time. The sauce mover's worst board and exit edge gaps are `3.800` units. Its landing margins are `3.400` and `4.857` units. Each 1.4 unit step rise is checked against the descending jump trajectory and retains a 3 unit landing surface.
+The longest fixed gap is Penne Ridge's `6.5` unit run jump. Its measured margin is `2.157` units. `worstMoverGap` solves the worst full-cycle envelope using actual width, travel, period, rise, and landing time. It does not consume the mover's authored initial `phase`, so initial-phase mutations do not change the reported margins. The sauce mover's worst board and exit edge gaps are `3.800` units. Its landing margins are `3.400` and `4.857` units. Each 1.4 unit step rise is checked against the descending jump trajectory and retains a 3 unit landing surface.
 
 ## TDD Evidence
 
@@ -123,13 +125,13 @@ Focused GREEN command:
 node --test tests/unit/world-one-simulation.test.js
 ```
 
-Result: 16 passed and 0 failed after adding recovery ground, vertical trajectory evidence, phase-aware mover evidence, the pillar exit, safe prompt timing, and real session progression tests.
+Result: 16 passed and 0 failed after adding recovery ground, vertical trajectory evidence, full-cycle mover envelope evidence, the pillar exit, safe prompt timing, and real session progression tests.
 
 Final full unit result: 48 passed and 0 failed.
 
-## Real Browser Results
+## In-Session Browser Results
 
-A real local Chrome process ran at 1440 by 900. Playwright used actual key-down and key-up durations against `http://127.0.0.1:8977/play/`.
+A one-off Chrome DevTools/CDP browser-control script drove a local Chrome process at 1440 by 900. It sent timed key-down and key-up input against `http://127.0.0.1:8977/play/`. The script was kept only in an ephemeral `/tmp` directory and was not retained in this repository. These observations were verified during the implementation session. They are not reproducible from the repository until Task 9 adds the browser smoke harness.
 
 - 700 ms walk from rest: `5.255` units.
 - 700 ms run from rest: `5.756` units.
@@ -147,8 +149,8 @@ A real local Chrome process ran at 1440 by 900. Playwright used actual key-down 
 - Death: crossing `killY` with one heart set hearts to 0 and finished the session.
 - Checkpoint respawn: Penne Ridge death after checkpoint returned the player to `x = 69.5` with 2 hearts.
 - Both `1-1` and `1-2` goal collisions produced the visible `Course Clear!` overlay.
-- Savoria console warnings and errors: 0.
-- External requests: 0.
+- In-session Savoria console warnings and errors observed: 0.
+- In-session external requests observed: 0.
 
 Headless Chrome emitted four known SwiftShader `GPU stall due to ReadPixels` warnings. They came from Chrome's software WebGL driver, not Savoria code.
 
@@ -162,7 +164,7 @@ Headless Chrome emitted four known SwiftShader `GPU stall due to ReadPixels` war
 - Confirmed the checkpoint precedes Penne Ridge's longest combined sequence.
 - Confirmed every fixed landing maps to an authored collision surface.
 - Confirmed all 5 Farfalle and 16 Penne Ridge mandatory transfers are represented.
-- Confirmed mover mutations fail at an unsafe sampled phase or invalid period.
+- Confirmed the full-cycle mover envelope rejects unsafe travel range and invalid period. Authored initial phase is outside this margin calculation.
 - Confirmed an unsafe 3.5 unit step rise fails the actual jump trajectory.
 - Confirmed tutorial duplicates stay suppressed after checkpoint respawn and reset in a fresh session.
 - Confirmed all required jumps retain more than the 0.5 unit margin.
@@ -172,4 +174,4 @@ Headless Chrome emitted four known SwiftShader `GPU stall due to ReadPixels` war
 
 ## Concerns
 
-Automation cannot prove human feel. A simple continuous run-and-jump driver reached `x = 89.593` in 1-1 and `x = 108.716` in 1-2, but it could not vary takeoff timing, wait for mover phases, or select short versus held jumps. It did not finish either course. Both completion handlers were verified separately through normal goal collision after placing the player at each goal with the existing test hook. A human keyboard pass through every obstacle remains the exact unverified judgment.
+The in-session browser observations are not reproducible from this repository because the one-off CDP script was not retained. Task 9 is expected to add the repository browser smoke harness. Automation also cannot prove human feel. The temporary continuous run-and-jump driver reached `x = 89.593` in 1-1 and `x = 108.716` in 1-2, but it could not vary takeoff timing, wait for a useful mover position, or select short versus held jumps. It did not finish either course. Both completion handlers were verified in-session through normal goal collision after placing the player at each goal with the existing test hook. A human keyboard pass through every obstacle remains the exact unverified judgment.

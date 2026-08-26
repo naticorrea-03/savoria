@@ -91,7 +91,7 @@ test('vertical rise mutations fail the deterministic jump trajectory', () => {
   assert.equal(report.unreachable.some((jump) => jump.id === step.id), true);
 });
 
-test('unsafe mover phases fail with actual width, range, and period', () => {
+test('mover full-cycle envelope rejects unsafe range and invalid period', () => {
   const capabilities = measureJumpCapabilities(DEFAULT_MOTION);
   const level = buildReleasedLevel(RELEASED_LEVELS[1]);
   const board = level.requiredJumps.find(
