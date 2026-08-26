@@ -29,16 +29,23 @@ export function compileSegments(def) {
     }
   };
 
-  const addRequiredJump = (sourceIndex, kind, takeoffX, distance, opts = {}) => {
+  const addRequiredJump = (sourceIndex, kind, opts) => {
     out.requiredJumps.push({
       id: `${def.id}:${sourceIndex}:${out.requiredJumps.length}`,
       sourceIndex,
       kind,
-      takeoffX,
-      distance,
+      takeoffX: opts.takeoffX,
+      takeoffY: opts.takeoffY,
+      landingX: opts.landingX,
+      landingY: opts.landingY,
+      gap: opts.gap,
+      rise: opts.rise,
+      landingWidth: opts.landingWidth,
+      transfer: opts.transfer,
       requiresRun: opts.requiresRun === true,
       movingPlatform: opts.movingPlatform === true,
       hazard: opts.hazard === true,
+      ...(opts.mover ? { mover: opts.mover } : {}),
     });
   };
 
@@ -75,42 +82,87 @@ export function compileSegments(def) {
       }
       if (opts.mover) {
         const moverY = opts.safeGround ? g + 1.1 : g - 0.4;
+        const moverWidth = 3.4;
+        const moverTravel = len - 4;
+        const moverPeriod = opts.period || 4;
+        const moverStartOffset = 2;
+        const moverTop = moverY + 0.4;
         out.movers.push({
-          box: [x + 2, moverY, 0, 3.4, 0.8, 6, 'plat'],
-          to: [len - 4, 0, 0],
-          period: opts.period || 4,
+          box: [x + moverStartOffset, moverY, 0, moverWidth, 0.8, 6, 'plat'],
+          to: [moverTravel, 0, 0],
+          period: moverPeriod,
+          phase: 0,
           sourceX: x,
           safe: opts.safeGround === true,
           hazard: opts.safeGround !== true,
         });
-      }
-      if (opts.flyer) out.enemies.push({ t: 'flyer', p: [x + len / 2, g + 3, 0], range: Math.min(len / 2, 6), axis: 'x' });
-      if (opts.mover) {
-        const approach = Math.max(0, (len - 3.4) / 2);
-        addRequiredJump(sourceIndex, kind, x, approach, {
+        const mover = {
+          width: moverWidth,
+          travel: moverTravel,
+          period: moverPeriod,
+          startOffset: moverStartOffset,
+          span: len,
+        };
+        addRequiredJump(sourceIndex, kind, {
+          takeoffX: x,
+          takeoffY: g,
+          landingX: null,
+          landingY: moverTop,
+          gap: 0,
+          rise: moverTop - g,
+          landingWidth: moverWidth,
+          transfer: 'board',
           requiresRun: opts.requiresRun,
           movingPlatform: true,
           hazard: !opts.safeGround,
+          mover: { ...mover, transfer: 'board' },
         });
-        addRequiredJump(sourceIndex, kind, x + len / 2, approach, {
+        addRequiredJump(sourceIndex, kind, {
+          takeoffX: x + moverStartOffset + moverWidth / 2,
+          takeoffY: moverTop,
+          landingX: x + len,
+          landingY: g,
+          gap: 0,
+          rise: g - moverTop,
+          transfer: 'exit',
           requiresRun: opts.requiresRun,
           movingPlatform: true,
           hazard: !opts.safeGround,
+          mover: { ...mover, transfer: 'exit' },
         });
       } else {
-        addRequiredJump(sourceIndex, kind, x, len, {
+        addRequiredJump(sourceIndex, kind, {
+          takeoffX: x,
+          takeoffY: g,
+          landingX: x + len,
+          landingY: g,
+          gap: len,
+          rise: 0,
+          transfer: 'gap',
           requiresRun: opts.requiresRun,
           hazard: !opts.safeGround,
         });
       }
+      if (opts.flyer) out.enemies.push({ t: 'flyer', p: [x + len / 2, g + 3, 0], range: Math.min(len / 2, 6), axis: 'x' });
       x += len;
     } else if (kind === 'rise') {
       g += a;
     } else if (kind === 'steps') {
       const n = a, dir = opts.dir || 1;
       for (let i = 0; i < n; i++) {
+        const takeoffG = g;
         if (dir > 0) g += 1.4;
-        addRequiredJump(sourceIndex, kind, x, 3, opts);
+        addRequiredJump(sourceIndex, kind, {
+          takeoffX: x,
+          takeoffY: takeoffG,
+          landingX: x,
+          landingY: g,
+          gap: 0,
+          rise: g - takeoffG,
+          landingWidth: 3,
+          transfer: 'step',
+          requiresRun: opts.requiresRun,
+        });
         out.boxes.push([x + 1.5, g - 2, 0, 3, 4, D, i % 2 ? 'ground2' : 'brick']);
         if (dir < 0) g -= 1.4;
         x += 3;
@@ -120,15 +172,36 @@ export function compileSegments(def) {
       const len = a;
       out.hazards.push([x + len / 2, g - 3.4, 0, len, D + 4]);
       const hops = Math.max(1, Math.round(len / 5));
+      const surfaces = [{ left: x, right: x, top: g, width: null }];
       for (let i = 1; i <= hops; i++) {
         const hx = x + (len * i) / (hops + 1);
-        out.boxes.push([hx, g - 0.3 + (i % 2) * 0.7, 0, 3, 0.9, 6, 'plat']);
+        const top = g + 0.15 + (i % 2) * 0.7;
+        out.boxes.push([hx, top - 0.45, 0, 3, 0.9, 6, 'plat']);
         out.coins.push([hx, g + 1.8 + (i % 2) * 0.7, 0]);
+        surfaces.push({
+          left: hx - 1.5,
+          right: hx + 1.5,
+          top,
+          width: 3,
+        });
       }
-      const centerSpacing = len / (hops + 1);
-      const landingGap = Math.max(0, centerSpacing - 1.5);
-      for (let i = 0; i <= hops; i++) {
-        addRequiredJump(sourceIndex, kind, x + centerSpacing * i, landingGap, {
+      surfaces.push({ left: x + len, right: x + len, top: g, width: null });
+      for (let i = 0; i < surfaces.length - 1; i++) {
+        const from = surfaces[i];
+        const to = surfaces[i + 1];
+        addRequiredJump(sourceIndex, kind, {
+          takeoffX: from.right,
+          takeoffY: from.top,
+          landingX: to.left,
+          landingY: to.top,
+          gap: Math.max(0, to.left - from.right),
+          rise: to.top - from.top,
+          landingWidth: to.width,
+          transfer: i === 0
+            ? 'bank-to-platform'
+            : i === surfaces.length - 2
+              ? 'platform-to-bank'
+              : 'platform-to-platform',
           hazard: true,
         });
       }
@@ -175,15 +248,42 @@ export function compileSegments(def) {
     } else if (kind === 'pillars') {
       const n = a;
       let top = g + 1.2;
+      let previousRight = x;
+      let previousTop = g;
       for (let i = 0; i < n; i++) {
-        addRequiredJump(sourceIndex, kind, x, i === 0 ? 1.75 : 2.5, opts);
+        const pillarLeft = x;
+        const pillarRight = x + 3.5;
+        addRequiredJump(sourceIndex, kind, {
+          takeoffX: previousRight,
+          takeoffY: previousTop,
+          landingX: pillarLeft,
+          landingY: top,
+          gap: Math.max(0, pillarLeft - previousRight),
+          rise: top - previousTop,
+          landingWidth: 3.5,
+          transfer: i === 0 ? 'enter' : 'pillar',
+          requiresRun: opts.requiresRun,
+        });
         out.boxes.push([x + 1.75, top - 6, 0, 3.5, 12, 6.5, i % 2 ? 'ground2' : 'brick']);
         out.coins.push([x + 1.75, top + 1.4, 0]);
         if (i < n - 1) out.coins.push([x + 4.4, top + 2.4, 0]);
+        previousRight = pillarRight;
+        previousTop = top;
         x += 6;
         top += (i % 3 === 2 ? -1.1 : 1.1);
       }
       g = Math.round((top - (n % 3 === 0 ? 0 : 1.1)) * 2) / 2;
+      addRequiredJump(sourceIndex, kind, {
+        takeoffX: previousRight,
+        takeoffY: previousTop,
+        landingX: x,
+        landingY: g,
+        gap: Math.max(0, x - previousRight),
+        rise: g - previousTop,
+        landingWidth: 6,
+        transfer: 'exit',
+        requiresRun: opts.requiresRun,
+      });
       out.boxes.push([x + 3, g - 2.5, 0, 6, 5, D, 'ground']);
       x += 6;
     } else if (kind === 'bonus') {
