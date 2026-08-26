@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base href="../">
+  <title>Play Savoria</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍝</text></svg>">
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/game.css">
+</head>
+<body>
+  <div id="desktop-required">
+    <div class="logo-stage compact-logo-stage"><img src="assets/sprites/savoria_logo.png" alt="Savoria"></div>
+    <h1>Bring a bigger screen.</h1>
+    <p>Savoria needs a desktop browser and keyboard. Open this page on a screen at least 900 pixels wide.</p>
+    <a href="./">Back to Savoria</a>
+  </div>
+
+  <div id="app">
+    <div id="title-screen" class="screen">
+      <div class="logo-stage title-logo-stage"><img class="logo" src="assets/sprites/savoria_logo.png" alt="Savoria"></div>
+      <div class="subtitle">A 3D Adventure</div>
+      <button class="btn" id="btn-play">Start Adventure</button>
+      <div class="subtitle local-note">100% local · no internet needed</div>
+    </div>
+
+    <div id="char-screen" class="screen hidden">
+      <h2 class="screen-title">Choose Your Chef</h2>
+      <div class="card-row" id="char-cards"></div>
+    </div>
+
+    <div id="map-screen" class="screen hidden">
+      <div class="map-head">
+        <h2 class="screen-title">Select World</h2>
+        <div class="map-meta">👨‍🍳 ×<span id="map-lives">4</span></div>
+      </div>
+      <div id="map-worlds"></div>
+      <button class="btn small" id="btn-back-char">← Change Chef</button>
+    </div>
+
+    <div id="hurt-flash"></div>
+    <div id="hud" class="hidden">
+      <div id="hud-level-panel">
+        <div id="hlp-world">PASTA PLAINS</div>
+        <div id="hlp-sub"><span id="hlp-num">1-1</span><span id="hlp-name">Farfalle Fields</span></div>
+        <div id="hlp-stars">☆☆☆</div>
+      </div>
+      <div class="hud-chip" id="hud-lives"><img id="hud-chef" src="assets/sprites/fatsio.png" alt="">×<span id="life-count">3</span></div>
+      <div class="hud-chip" id="hud-tomatoes"><img src="assets/sprites/tomato.png" alt=""> <span id="tomato-count">0</span></div>
+      <div class="hud-chip" id="hud-hearts"></div>
+      <div class="hud-chip" id="hud-timer">🕐 <span id="timer-text">0:00</span></div>
+      <div class="hud-chip" id="hud-power"><img id="power-icon" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt=""><span id="power-time"></span></div>
+      <div id="hud-boss"><span class="label">Don Funghi</span><div class="bar"><div class="fill" id="boss-fill"></div></div></div>
+      <div id="hud-msg"></div>
+      <div id="help">← → or A/D move · Shift run · Space or ↑ jump · Esc pause</div>
+    </div>
+
+    <div id="pause-overlay" class="overlay hidden">
+      <div class="panel">
+        <h2>Paused</h2>
+        <button class="btn" id="btn-resume">Resume</button>
+        <button class="btn small" id="btn-restart">Restart Level</button>
+        <button class="btn small" id="btn-quit">Level Select</button>
+      </div>
+    </div>
+
+    <div id="complete-overlay" class="overlay hidden">
+      <div class="panel">
+        <h2 id="complete-title">Course Clear!</h2>
+        <div class="stars" id="complete-stars"></div>
+        <div class="stats" id="complete-stats"></div>
+        <button class="btn" id="btn-next">Continue</button>
+        <button class="btn small" id="btn-replay">Replay</button>
+      </div>
+    </div>
+
+    <div id="gameover-screen" class="screen hidden">
+      <h2 class="screen-title">Out of Chefs!</h2>
+      <div class="subtitle">The kitchen closes… for now.</div>
+      <button class="btn" id="btn-go-retry">Try Again</button>
+      <button class="btn small" id="btn-go-menu">Main Menu</button>
+    </div>
+
+    <div id="win-screen" class="screen hidden">
+      <div class="logo-stage win-logo-stage"><img class="logo win-logo" src="assets/sprites/savoria_logo.png" alt="Savoria"></div>
+      <h2 class="screen-title">Don Funghi is Defeated!</h2>
+      <div class="subtitle">Savoria's flavor is safe. Buon appetito! 🍝</div>
+      <button class="btn" id="btn-win-menu">Main Menu</button>
+    </div>
+  </div>
+  <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
+  <script type="module" src="js/main.js?v=2"></script>
+</body>
+</html>

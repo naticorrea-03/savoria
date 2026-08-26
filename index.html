@@ -1,236 +1,113 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Savoria 3D</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍝</text></svg>">
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
-  html,body { width:100%; height:100%; overflow:hidden; background:#1a0f08; font-family:'Avenir Next','Trebuchet MS',sans-serif; }
-  #app { position:relative; width:100%; height:100%; }
-  canvas { display:block; }
-
-  .screen { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; z-index:20; }
-  .hidden { display:none !important; }
-
-  #title-screen { background:linear-gradient(180deg,#ffb84d 0%,#e8843a 45%,#a63e1b 100%); }
-  #title-screen img.logo { width:min(420px,70vw); filter:drop-shadow(0 8px 18px rgba(60,20,0,.45)); }
-  .subtitle { color:#fff4d6; font-size:20px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; text-shadow:0 2px 6px rgba(90,30,0,.5); }
-
-  .btn {
-    background:linear-gradient(180deg,#ffe9b0,#f2b544); color:#5a2c0a;
-    border:3px solid #8a4a12; border-radius:14px; padding:14px 42px;
-    font-size:22px; font-weight:800; cursor:pointer; letter-spacing:.04em;
-    box-shadow:0 5px 0 #8a4a12, 0 10px 20px rgba(60,20,0,.35); transition:transform .08s;
-    font-family:inherit;
-  }
-  .btn:hover { transform:translateY(-2px); }
-  .btn:active { transform:translateY(2px); box-shadow:0 2px 0 #8a4a12; }
-  .btn.small { font-size:16px; padding:9px 24px; }
-  .btn:disabled { filter:grayscale(.8); opacity:.55; cursor:default; }
-
-  h2.screen-title { color:#fff4d6; font-size:34px; font-weight:900; letter-spacing:.06em; text-shadow:0 3px 8px rgba(90,30,0,.55); }
-
-  #char-screen, #level-screen, #gameover-screen, #win-screen { background:linear-gradient(180deg,#c96a2e 0%,#8a3c16 60%,#5a2410 100%); }
-  .card-row { display:flex; gap:26px; flex-wrap:wrap; justify-content:center; }
-  .char-card, .level-card {
-    background:linear-gradient(180deg,#fff3d8,#f5cf8e); border:3px solid #8a4a12; border-radius:18px;
-    padding:18px 22px; width:190px; text-align:center; cursor:pointer;
-    box-shadow:0 6px 0 #8a4a12, 0 14px 24px rgba(60,20,0,.35); transition:transform .1s;
-  }
-  .char-card:hover, .level-card:hover { transform:translateY(-5px) scale(1.03); }
-  .char-card img { height:150px; object-fit:contain; }
-  .char-card .name, .level-card .name { font-weight:900; color:#5a2c0a; font-size:19px; margin-top:8px; }
-  .char-card .desc, .level-card .desc { color:#7a4a1a; font-size:13px; margin-top:4px; font-weight:600; }
-  /* World map (strip-per-world, level nodes on a dotted path) */
-  #map-screen { justify-content:flex-start; padding:28px 0 20px; overflow-y:auto; }
-  .map-head { display:flex; align-items:center; gap:22px; }
-  .map-meta { color:#ffe9b0; font-size:20px; font-weight:800; text-shadow:0 2px 5px rgba(0,0,0,.5); }
-  #map-worlds { display:flex; flex-direction:column; gap:12px; width:min(880px, 92vw); }
-  .world-strip {
-    position:relative; display:flex; align-items:center; gap:16px;
-    border:3px solid #8a4a12; border-radius:16px; padding:12px 18px; min-height:96px;
-    background-size:cover; background-position:center 35%;
-    box-shadow:inset 0 0 0 1000px rgba(40,16,2,.38), 0 6px 16px rgba(40,15,0,.4);
-  }
-  .world-strip.locked { filter:grayscale(.85) brightness(.6); }
-  .world-badge { display:flex; align-items:center; gap:12px; min-width:270px; }
-  .world-badge .wnum {
-    background:linear-gradient(180deg,#ffe9b0,#f2b544); color:#5a2c0a; border:2px solid #8a4a12;
-    width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center;
-    font-weight:900; font-size:20px; flex:none;
-  }
-  .world-badge .wname { color:#fff; font-weight:900; font-size:19px; text-shadow:0 2px 5px rgba(0,0,0,.7); line-height:1.1; }
-  .world-badge .wname small { display:block; font-size:11px; font-weight:700; opacity:.85; letter-spacing:.05em; }
-  .world-badge .wstars { color:#ffe9b0; font-weight:800; font-size:14px; text-shadow:0 1px 4px #000; }
-  .level-nodes { display:flex; align-items:center; gap:26px; margin-left:auto; padding-right:8px; position:relative; }
-  .level-nodes::before {
-    content:''; position:absolute; left:6px; right:6px; top:50%;
-    border-top:3px dotted rgba(255,236,190,.75); z-index:0;
-  }
-  .level-node {
-    position:relative; z-index:1; width:58px; height:58px; border-radius:50%;
-    background:linear-gradient(180deg,#fff3d8,#f2b544); border:3px solid #8a4a12;
-    font-family:inherit; font-weight:900; color:#5a2c0a; cursor:pointer;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
-    box-shadow:0 4px 0 #8a4a12; transition:transform .1s; font-size:15px;
-  }
-  .level-node:hover { transform:translateY(-3px) scale(1.06); }
-  .level-node .nstars { font-size:9px; letter-spacing:-1px; }
-  .level-node.locked { background:#7a6a55; color:#3a3028; cursor:default; box-shadow:none; font-size:18px; }
-  .level-node.locked:hover { transform:none; }
-  .level-node.current { outline:3px solid #fff; outline-offset:2px; }
-
-  /* HUD */
-  #hud { position:absolute; inset:0; pointer-events:none; z-index:10; }
-  .hud-chip {
-    position:absolute; display:flex; align-items:center; gap:8px;
-    background:url('assets/sprites/hud_chip_dark.png'); background-size:100% 100%;
-    border:none; border-radius:999px;
-    padding:9px 20px; color:#ffe9b0; font-weight:800; font-size:19px;
-    text-shadow:0 1px 3px #000;
-  }
-  #hurt-flash {
-    position:absolute; inset:0; z-index:12; pointer-events:none;
-    background:radial-gradient(ellipse at center, transparent 40%, rgba(200,20,10,.8) 100%);
-    opacity:0; transition:opacity .25s;
-  }
-  .hud-chip img { height:26px; }
-  /* wood level panel, reference layout: world name, level badge, star sockets */
-  #hud-level-panel {
-    position:absolute; top:14px; left:14px;
-    background:url('assets/sprites/dialog_card.png'); background-size:100% 100%;
-    padding:16px 28px 14px; border-radius:14px; min-width:230px;
-    filter:drop-shadow(0 6px 14px rgba(0,0,0,.4));
-  }
-  #hlp-world { color:#5a2c0a; font-size:21px; font-weight:900; letter-spacing:.5px; }
-  #hlp-sub { display:flex; align-items:center; gap:8px; margin-top:3px; }
-  #hlp-num { background:#2e5a1e; color:#ffe9b0; font-weight:900; font-size:13px; padding:2px 8px; border-radius:6px; }
-  #hlp-name { color:#7a4a1a; font-weight:800; font-size:15px; }
-  #hlp-stars { margin-top:4px; font-size:17px; letter-spacing:4px; }
-  #hud-chef { height:34px; width:34px; border-radius:50%; border:2px solid #f2c14e; object-fit:cover; background:#1e3a1a; }
-  #hud-lives { top:16px; left:290px; }
-  #hud-tomatoes { top:16px; left:440px; }
-  #hud-hearts { top:16px; left:580px; font-size:21px; letter-spacing:2px; }
-  #hud-timer { top:16px; right:16px; font-variant-numeric:tabular-nums; }
-  #hud-power { bottom:18px; left:16px; display:none; }
-  #hud-power img { height:30px; }
-  #hud-msg {
-    position:absolute; top:26%; left:50%; transform:translateX(-50%);
-    color:#fff; font-size:30px; font-weight:900; text-shadow:0 3px 10px rgba(0,0,0,.7);
-    opacity:0; transition:opacity .3s; text-align:center; white-space:nowrap;
-  }
-  #hud-boss { position:absolute; top:64px; left:50%; transform:translateX(-50%); display:none; align-items:center; gap:10px; }
-  #hud-boss .bar { width:240px; height:16px; background:rgba(0,0,0,.55); border:2px solid #ffd88c; border-radius:9px; overflow:hidden; }
-  #hud-boss .fill { height:100%; width:100%; background:linear-gradient(90deg,#a34fc9,#7a2d9e); transition:width .3s; }
-  #hud-boss .label { color:#ffe9b0; font-weight:800; text-shadow:0 1px 3px #000; }
-
-  /* Pause / complete overlays */
-  .overlay {
-    position:absolute; inset:0; z-index:15; display:flex; flex-direction:column;
-    align-items:center; justify-content:center; gap:18px; background:rgba(30,12,2,.66); backdrop-filter:blur(4px);
-  }
-  .panel {
-    background:url('assets/sprites/dialog_card.png'); background-size:100% 100%;
-    border:none; border-radius:22px;
-    padding:44px 64px; text-align:center; filter:drop-shadow(0 18px 40px rgba(0,0,0,.5));
-    display:flex; flex-direction:column; gap:14px; align-items:center;
-  }
-  .panel h2 { color:#5a2c0a; font-size:32px; font-weight:900; }
-  .panel .stats { color:#7a4a1a; font-size:18px; font-weight:700; line-height:1.7; }
-  .panel .stars { font-size:40px; letter-spacing:6px; }
-
-  #help {
-    position:absolute; bottom:14px; right:16px; color:rgba(255,236,190,.85); font-size:13px; font-weight:600;
-    text-shadow:0 1px 3px #000; text-align:right; line-height:1.5; pointer-events:none; z-index:10;
-  }
-  .fade-in { animation:fadeIn .4s ease; }
-  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Play Savoria, a community-built food platformer, and learn how to add your own level.">
+  <title>Savoria | A Delicious Adventure</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍝</text></svg>">
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/landing.css">
 </head>
 <body>
-<div id="app">
-  <!-- Title -->
-  <div id="title-screen" class="screen">
-    <img class="logo" src="assets/sprites/savoria_logo.png" alt="Savoria">
-    <div class="subtitle">A 3D Adventure</div>
-    <button class="btn" id="btn-play">Play</button>
-    <div class="subtitle" style="font-size:12px;opacity:.8">100% local · no internet needed</div>
-  </div>
+  <header class="site-header">
+    <a class="site-mark" href="#hero" aria-label="Savoria home">Savoria</a>
+    <nav class="site-nav" aria-label="Main navigation">
+      <a href="#world-one">World 1</a>
+      <a href="#controls">Controls</a>
+      <a href="#contribute">Add a level</a>
+      <a class="nav-play" data-play href="play/">Play</a>
+    </nav>
+  </header>
 
-  <!-- Character select -->
-  <div id="char-screen" class="screen hidden">
-    <h2 class="screen-title">Choose Your Chef</h2>
-    <div class="card-row" id="char-cards"></div>
-  </div>
-
-  <!-- World map -->
-  <div id="map-screen" class="screen hidden">
-    <div class="map-head">
-      <h2 class="screen-title">Select World</h2>
-      <div class="map-meta">👨‍🍳 ×<span id="map-lives">4</span></div>
+  <main class="landing-main">
+    <div class="pasta-course" aria-hidden="true">
+      <span class="ribbon-one"></span>
+      <span class="ribbon-two"></span>
+      <span class="ribbon-three"></span>
     </div>
-    <div id="map-worlds"></div>
-    <button class="btn small" id="btn-back-char">← Change Chef</button>
-  </div>
 
-  <!-- HUD -->
-  <div id="hurt-flash"></div>
-  <div id="hud" class="hidden">
-    <div id="hud-level-panel">
-      <div id="hlp-world">PASTA PLAINS</div>
-      <div id="hlp-sub"><span id="hlp-num">1-1</span><span id="hlp-name">Farfalle Fields</span></div>
-      <div id="hlp-stars">☆☆☆</div>
-    </div>
-    <div class="hud-chip" id="hud-lives"><img id="hud-chef" src="assets/sprites/fatsio.png">×<span id="life-count">3</span></div>
-    <div class="hud-chip" id="hud-tomatoes"><img src="assets/sprites/tomato.png"><span id="tomato-count">0</span></div>
-    <div class="hud-chip" id="hud-hearts"></div>
-    <div class="hud-chip" id="hud-timer">🕐 <span id="timer-text">0:00</span></div>
-    <div class="hud-chip" id="hud-power"><img id="power-icon" src=""><span id="power-time"></span></div>
-    <div id="hud-boss"><span class="label">Don Funghi</span><div class="bar"><div class="fill" id="boss-fill"></div></div></div>
-    <div id="hud-msg"></div>
-    <div id="help">← → or A/D move · Space or ↑ jump (press twice to double jump) · Esc pause</div>
-  </div>
+    <section class="landing-section" id="hero">
+      <div class="hero-copy">
+        <div class="logo-stage hero-logo-stage">
+          <img class="hero-logo" src="assets/sprites/savoria_logo.png" alt="Savoria: A Delicious Adventure">
+        </div>
+        <p class="eyebrow">A community-built food platformer</p>
+        <h1><span class="sr-only">Savoria: </span>Run the pasta course.</h1>
+        <p>Jump through Pasta Plains, collect tomatoes, and help build what comes next.</p>
+        <a class="button button-primary" data-play href="play/">Play Savoria</a>
+        <span class="hero-stamp">Desktop<br>keyboard<br>adventure</span>
+      </div>
+    </section>
 
-  <!-- Pause -->
-  <div id="pause-overlay" class="overlay hidden">
-    <div class="panel">
-      <h2>Paused</h2>
-      <button class="btn" id="btn-resume">Resume</button>
-      <button class="btn small" id="btn-restart">Restart Level</button>
-      <button class="btn small" id="btn-quit">Level Select</button>
-    </div>
-  </div>
+    <section class="landing-section" id="world-one">
+      <div class="section-grid">
+        <figure class="world-preview">
+          <img src="assets/sprites/world1_thumb.png" alt="The hills, pasta, and sauce rivers of Pasta Plains">
+        </figure>
+        <div class="world-copy">
+          <p class="eyebrow">World 1 is ready</p>
+          <h2>Pasta Plains</h2>
+          <p>Two hand-built courses. Three chefs. One hungry mushroom boss.</p>
+          <ol class="course-list">
+            <li><span>1-1</span> Farfalle Fields</li>
+            <li><span>1-2</span> Penne Ridge</li>
+          </ol>
+        </div>
+      </div>
+    </section>
 
-  <!-- Level complete -->
-  <div id="complete-overlay" class="overlay hidden">
-    <div class="panel">
-      <h2 id="complete-title">Course Clear!</h2>
-      <div class="stars" id="complete-stars"></div>
-      <div class="stats" id="complete-stats"></div>
-      <button class="btn" id="btn-next">Continue</button>
-      <button class="btn small" id="btn-replay">Replay</button>
-    </div>
-  </div>
+    <section class="landing-section" id="controls">
+      <div class="controls-inner">
+        <p class="eyebrow">Keyboard controls</p>
+        <h2>Simple moves. Tricky timing.</h2>
+        <div class="control-line">
+          <div class="keys"><kbd>A</kbd><kbd>D</kbd><kbd>←</kbd><kbd>→</kbd></div>
+          <p>Move left or right</p>
+        </div>
+        <div class="control-line">
+          <div class="keys"><kbd>Shift</kbd></div>
+          <p>Hold to run</p>
+        </div>
+        <div class="control-line">
+          <div class="keys"><kbd>Space</kbd><kbd>↑</kbd></div>
+          <p>Jump. Hold for more height.</p>
+        </div>
+        <div class="control-line">
+          <div class="keys"><kbd>Esc</kbd></div>
+          <p>Pause the course</p>
+        </div>
+      </div>
+    </section>
 
-  <!-- Game over -->
-  <div id="gameover-screen" class="screen hidden">
-    <h2 class="screen-title">Out of Chefs!</h2>
-    <div class="subtitle">The kitchen closes… for now.</div>
-    <button class="btn" id="btn-go-retry">Try Again</button>
-    <button class="btn small" id="btn-go-menu">Main Menu</button>
-  </div>
+    <section class="landing-section" id="contribute">
+      <div class="contribute-panel">
+        <div class="contribute-copy">
+          <p class="eyebrow">Add a level</p>
+          <h2>Write a recipe. Build a course.</h2>
+          <p>Levels are short lists of familiar pieces. You shape the route. Savoria handles the game world.</p>
+          <a class="button button-secondary" href="https://github.com/nataliacorrea03/savoria">See the project on GitHub</a>
+        </div>
+        <pre class="recipe" aria-label="Example level recipe"><code>level(1, 3, 'Your Course', 'pasta', 240, [
+  ['run', 18, { coins: 5 }],
+  ['gap', 3, { arc: 4 }],
+  ['checkpoint', 0],
+  ['goal', 0]
+]);</code></pre>
+      </div>
+    </section>
+  </main>
 
-  <!-- Win -->
-  <div id="win-screen" class="screen hidden">
-    <img class="logo" src="assets/sprites/savoria_logo.png" style="width:min(320px,60vw)">
-    <h2 class="screen-title">Don Funghi is Defeated!</h2>
-    <div class="subtitle">Savoria's flavor is safe. Buon appetito! 🍝</div>
-    <button class="btn" id="btn-win-menu">Main Menu</button>
-  </div>
-</div>
-<script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
-<script type="module" src="js/main.js?v=2"></script>
+  <footer class="site-footer">
+    <p>Built one course at a time.</p>
+    <nav class="footer-links" aria-label="Project links">
+      <a href="https://github.com/nataliacorrea03/savoria">GitHub</a>
+      <a href="README.md">Local setup</a>
+      <a href="https://github.com/nataliacorrea03/savoria#credits">Credits</a>
+      <a href="https://github.com/nataliacorrea03/savoria#licensing">Licensing</a>
+    </nav>
+  </footer>
+
+  <script type="module" src="js/site.js"></script>
 </body>
 </html>
