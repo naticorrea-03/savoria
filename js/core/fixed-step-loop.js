@@ -18,7 +18,7 @@ export class FixedStepLoop {
       simulations += 1;
     }
 
-    if (simulations === this.maxSteps && this.accumulator >= this.step) {
+    if (simulations === this.maxSteps) {
       this.accumulator = 0;
     }
 

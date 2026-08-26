@@ -36,3 +36,14 @@ test('excess catch-up time is discarded after a capped frame', () => {
   loop.advance(0, () => simulations++, () => {});
   assert.equal(simulations, 0);
 });
+
+test('a capped frame discards fractional overflow before the next frame', () => {
+  const loop = new FixedStepLoop();
+  let simulations = 0;
+  loop.advance(0.09, () => simulations++, () => {});
+  assert.equal(simulations, 5);
+
+  simulations = 0;
+  loop.advance(0.01, () => simulations++, () => {});
+  assert.equal(simulations, 0);
+});
