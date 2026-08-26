@@ -11,6 +11,7 @@ body {
 }
 
 #app {
+  display: none;
   height: 100%;
   position: relative;
   width: 100%;
@@ -468,6 +469,7 @@ h2.screen-title {
 #desktop-required {
   align-content: center;
   background: var(--espresso);
+  display: grid;
   gap: 1rem;
   grid-template-columns: minmax(0, 1fr);
   inset: 0;
@@ -504,12 +506,8 @@ h2.screen-title {
   font-weight: 800;
 }
 
-@media (max-width: 899px), (max-height: 620px) {
-  #app { display: none; }
-  #desktop-required { display: grid; }
-}
-
 @media (min-width: 900px) and (min-height: 620px) {
+  #app { display: block; }
   #desktop-required { display: none; }
 }
 

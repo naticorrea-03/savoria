@@ -199,14 +199,31 @@ h3 {
 }
 
 .pasta-course {
+  --lead-start: calc(max(0px, 50vw - 38rem) + var(--page-pad) + 11rem);
   bottom: 23rem;
   left: 0;
   overflow: hidden;
   pointer-events: none;
   position: absolute;
   right: 0;
-  top: min(72vh, 43rem);
+  top: min(86vh, 48rem);
   z-index: 0;
+}
+
+.ribbon-lead {
+  background: var(--pasta-gold);
+  border: 0 !important;
+  border-radius: 999px 0 0 999px;
+  height: 3.6rem;
+  left: var(--lead-start);
+  top: 0;
+  width: calc(56% - var(--lead-start));
+}
+
+.pasta-course .ribbon-lead::after {
+  border: 0;
+  border-top: 0.18rem dashed rgb(255 233 176 / 45%);
+  inset: 50% 0 auto 1rem;
 }
 
 .pasta-course span {
@@ -388,6 +405,11 @@ kbd {
   position: relative;
 }
 
+.contribute-panel a:focus-visible {
+  outline: 4px solid var(--espresso);
+  outline-offset: 5px;
+}
+
 .recipe {
   align-self: center;
   background: var(--espresso);
@@ -470,6 +492,20 @@ kbd {
 }
 
 @media (min-width: 900px) and (max-height: 760px) {
+  .pasta-course {
+    --lead-start: calc(50% + 3rem);
+    top: 66vh;
+  }
+
+  .ribbon-lead {
+    width: calc(70% - var(--lead-start));
+  }
+
+  .ribbon-one {
+    left: 70%;
+    width: 23%;
+  }
+
   #hero {
     min-height: 100vh;
     padding-top: 6rem;
