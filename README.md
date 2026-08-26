@@ -1,38 +1,78 @@
-# Savoria 3D
+# Savoria
 
-A fully local side-scrolling platformer in a 3D-rendered world, set in the Savoria universe. Your art, your worlds, your characters. No internet needed, ever.
+Savoria is a desktop food platformer. Choose a chef, cross Pasta Plains, collect tomatoes, and clear two hand-built courses.
 
 ## Play
 
-Double-click **Play Savoria 3D.command**. It starts a tiny local server (port 8977) and opens the game in your browser. Works with wifi off.
+The game route is [`/play/`](./play/). It is not hosted or published from this repository yet. Run it locally first:
 
-## Controls
+```bash
+python3 serve.py
+```
 
-- **← →** (or A/D) move
-- **Space** or **↑** jump, press again mid-air for a double jump
-- **Esc** pause
+Open <http://127.0.0.1:8977/>. Use a desktop browser at least 900 by 620 pixels.
 
-## The Game
+Controls: A/D or Left/Right to move, Shift to run, Space or Up to jump, and Escape to pause.
 
-Pick a chef (Fatsio, Dinnerette, or Chefno), then work through the world map: 6 worlds, 12 levels, unlocked in order.
+## Why the browser build
 
-1. **Pasta Plains** (Italian) — Farfalle Fields, Penne Ridge
-2. **Sushi Shores** (Japanese) — Nori Narrows, Wasabi Falls
-3. **Taco Territory** (Mexican) — Guaca Mesa, Salsa Rapids
-4. **Curry Cliffs** (Indian) — Turmeric Terraces, Vindaloo Heights
-5. **Dumpling Dynasty** (Chinese) — Bao Bridges, Wonton Wall
-6. **Dessert Dome** (Sweet) — Macaron Pass, then Don Funghi's boss fight: dodge his charge, stomp him when he's tired. Three stomps wins.
+Savoria began as a Godot project. That work shaped the game art and direction. The current browser build makes a course easy to review, run locally, and change through a compact level recipe. Both versions are part of the project story.
 
-- 🍅 Tomatoes are coins. Stomping enemies pays 2. Every 100 = extra life.
-- ✨ Glowing arches are bonus doors: they warp you to a coin vault in the clouds, and a second door brings you back.
-- 🌿 Basil heals a heart. Bubbled powerups: **Speed Pasta**, **Parmesan Shield**, **Basil Boost** (higher jumps).
-- 🚩 Grey flag = mid-level checkpoint. Marinara/salsa/broth = do not touch.
-- Stars per level (finish + 60% tomatoes + 2 hearts left). Progress saves locally.
+## How levels work
 
-## Tech
+A level is data. `js/levels/validate.js` checks the recipe, `js/levels/compiler.js` turns it into neutral game data, and the runtime renders it.
 
-Three.js (vendored in `vendor/`, no CDN), vanilla JS, zero build step, zero external requests. Terrain and parallax hills are 3D geometry; characters are billboard sprites from the Savoria Godot project. Side-view camera with facing lookahead.
+World 1 definitions live in [`js/levels/world-one.js`](./js/levels/world-one.js). This is a valid compact recipe in that file:
 
-- `js/levels.js` — themes + a segment DSL (`run`, `gap`, `steps`, `river`, `plats`, `boss`…). A level is ~12 lines; add more by copying a recipe.
-- `js/game.js` — engine: physics (with coyote time, jump buffering, ledge step-up), enemies, boss, particles, synth SFX.
-- `js/main.js` — menus, world map, HUD, lives, save data.
+```js
+level(1, 3, 'Your Course', 'pasta', 240, [
+  ['run', 18, { coins: 5 }],
+  ['gap', 3, { arc: 4 }],
+  ['checkpoint', 0],
+  ['goal', 0],
+]);
+```
+
+Supported primitives are `run`, `gap`, `rise`, `steps`, `river`, `plats`, `roll`, `blocks`, `tier`, `pillars`, `bonus`, `checkpoint`, `goal`, and `boss`.
+
+## Local setup
+
+Runtime play needs no build step. Tests need Node and the package dependencies.
+
+```bash
+npm install
+npm test
+npm run test:browser
+```
+
+`npm test` includes validator, compiler, and World 1 reachability coverage. `npm run test:browser` starts `python3 serve.py` when no local server is already running.
+
+## Architecture
+
+- `index.html` is the landing page.
+- `play/index.html` is the game shell.
+- `js/levels/` contains the level DSL, validation, compiler, themes, and released World 1 data.
+- `js/core/`, `js/gameplay/`, and `js/ui/` own rendering, game rules, and screens.
+- `tests/unit/` covers game logic and level reachability. `tests/browser/` covers the desktop flow.
+
+## Contribute
+
+Start with [the contribution guide](./CONTRIBUTING.md). It includes a copyable Claude Code prompt, the DSL checks, and the local playtest flow.
+
+## Project status
+
+Released game content is World 1, Pasta Plains: **1-1 Farfalle Fields** and **1-2 Penne Ridge**. The release registry contains only those levels.
+
+Worlds 2 through 6 live in `js/experimental/`. They are hidden experimental data. They are not part of the released game, public map, or progression.
+
+This repository does not claim a hosted build, public repository, remote CI run, or Pages deployment.
+
+## Licensing
+
+Original code is under the [MIT License](./LICENSE). Original images and synthesized audio are under [CC BY-NC 4.0](./ASSET-LICENSE.md). The Savoria name and logo are reserved. See [asset licensing](./ASSET-LICENSE.md) and [credits](./CREDITS.md) for the full split.
+
+This is a project licensing choice, not legal advice.
+
+## Credits
+
+See [CREDITS.md](./CREDITS.md), including the retained Three.js notice.
