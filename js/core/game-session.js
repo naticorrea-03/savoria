@@ -16,6 +16,35 @@ import {
 export const INITIAL_HEARTS = 3;
 const MAX_HEARTS = 5;
 const BASE_ANIMATION_SPEED = 8.6;
+const GAMEPLAY_CODES = new Set([
+  'Space',
+  'ArrowUp',
+  'ArrowLeft',
+  'ArrowRight',
+  'KeyW',
+  'KeyA',
+  'KeyD',
+  'ShiftLeft',
+  'ShiftRight',
+  'Escape',
+]);
+const PREVENT_DEFAULT_CODES = new Set([
+  'Space',
+  'ArrowUp',
+  'ArrowLeft',
+  'ArrowRight',
+  'KeyW',
+  'KeyA',
+  'KeyD',
+]);
+
+export function shouldCaptureGameplayInput(event, { running, finished }) {
+  if (!running || finished || !GAMEPLAY_CODES.has(event.code)) return false;
+  const interactive = event.target?.closest?.(
+    'button, a, input, select, textarea, [contenteditable="true"]',
+  );
+  return !interactive;
+}
 
 export class GameSession {
   constructor({ container, level, characterId, textures, emit }) {
@@ -130,19 +159,9 @@ export class GameSession {
   }
 
   attachInput() {
-    const preventDefaultCodes = new Set([
-      'Space',
-      'ArrowUp',
-      'ArrowDown',
-      'ArrowLeft',
-      'ArrowRight',
-      'KeyW',
-      'KeyA',
-      'KeyS',
-      'KeyD',
-    ]);
     this.onKeyDown = (event) => {
-      if (preventDefaultCodes.has(event.code)) event.preventDefault();
+      if (!shouldCaptureGameplayInput(event, this)) return;
+      if (PREVENT_DEFAULT_CODES.has(event.code)) event.preventDefault();
       if (event.repeat) return;
       this.input.press(event.code);
       if (event.code === 'Escape') this.emit('pause');

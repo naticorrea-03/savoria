@@ -12,6 +12,7 @@ import { createActiveProgressReporter } from './level-loading.js';
 import { loadSave, writeSave } from './save-store.js';
 import {
   CHARACTERS,
+  createWebGLCapabilityProbe,
   formatTime,
   initialUiState,
   reduceUiState,
@@ -32,6 +33,7 @@ let session = null;
 let lives = 4;
 let levelStartId = 0;
 let msgTimer = null;
+const hasWebGL = createWebGLCapabilityProbe(() => document.createElement('canvas'));
 
 function dispatch(event) {
   const previous = uiState;
@@ -120,15 +122,6 @@ function onGameEvent(type, data) {
     case 'complete':
       onComplete(data);
       break;
-  }
-}
-
-function hasWebGL() {
-  try {
-    const canvas = document.createElement('canvas');
-    return Boolean(canvas.getContext('webgl2') || canvas.getContext('webgl'));
-  } catch {
-    return false;
   }
 }
 
@@ -334,6 +327,12 @@ const movementCodes = new Set([
 ]);
 
 addEventListener('keydown', (event) => {
+  const focusedLink = event.target?.closest?.('a[href]');
+  if (event.code === 'Space' && focusedLink) {
+    event.preventDefault();
+    focusedLink.click();
+    return;
+  }
   if (uiState.screen === 'playing' && movementCodes.has(event.code)) {
     dispatch({ type: 'MOVEMENT_USED' });
   }
@@ -349,35 +348,15 @@ document.addEventListener('visibilitychange', () => {
 
 addEventListener('beforeunload', cancelLevel);
 
-function showScreenForTest(id) {
-  if (id === 'title-screen') dispatch({ type: 'RETURN_TITLE' });
-  if (id === 'char-screen') dispatch({ type: 'START' });
-  if (id === 'map-screen') {
-    dispatch({ type: 'CHOOSE_CHARACTER', characterId: uiState.save.chef });
-  }
+function showScreen(id) {
+  dispatch({ type: 'HOOK_SHOW_SCREEN', id });
 }
 
 window.__savoriaTest = {
   startLevel,
-  dispatch,
-  showScreen: showScreenForTest,
+  showScreen,
   releasedLevels: RELEASED_LEVELS,
-  get state() { return uiState; },
   get session() { return session; },
-  simulateAssetFailure(asset = 'tile_top.png') {
-    dispatch({ type: 'LOAD_FAILED', asset });
-  },
-  simulateWebGLFailure() {
-    dispatch({ type: 'WEBGL_FAILED' });
-  },
-  simulateCompletion(stars = 2) {
-    dispatch({
-      type: 'COURSE_COMPLETE',
-      levelId: uiState.selectedLevelId ?? '1-1',
-      stars,
-      stats: { coins: 8, totalCoins: 10, time: 42 },
-    });
-  },
 };
 
 renderUi(uiState);

@@ -176,3 +176,115 @@ The reducer paths for completion, retry, asset failure, WebGL failure, and save 
 ## Concerns
 
 The implementation is unit-green and the core 1280 by 720 flow is live-verified. Final release review still needs the exact browser checks listed above. The stalled browser probe is a verification gap, not proof that those states are broken.
+
+## Fix round 1
+
+Date: 2026-08-26
+
+### Findings addressed
+
+1. Gameplay input now ignores keys from focused buttons, links, form controls, and editable content. Paused and finished sessions also ignore gameplay keys. Live Escape pause and gameplay movement remain captured on the game stage.
+2. Space activation remains native for buttons. A focused link receives explicit Space activation because browsers normally reserve Space for scrolling.
+3. Pause, complete, and recovery panels now use an opaque parmesan interior, espresso border, and dark text. The existing Savoria button and panel geometry remains.
+4. Paused and complete states remove `data-ui-state="playing"` from the visual game stage. The stage and HUD receive both `inert` and `aria-hidden="true"`. Playing removes those attributes and restores its active state root.
+5. WebGL capability probing is cached. The probe requests one context and calls `WEBGL_lose_context` when available.
+6. The legacy `showScreen` hook is restored through the reducer.
+7. The Task 6 test surface now exposes exactly `startLevel`, `showScreen`, `releasedLevels`, and `session`.
+
+### Legacy hook mappings
+
+| `showScreen` input | Task 8 state |
+| --- | --- |
+| `title-screen` | `title` |
+| `char-screen` | `characters` |
+| `map-screen` | `world` |
+| `null` | `playing` |
+| `gameover-screen` | `error` with game-over recovery |
+| `win-screen` | `complete` with World 1 completion copy |
+
+Unknown IDs leave state unchanged.
+
+### Fix-round RED evidence
+
+The focused suite failed before the new helpers existed:
+
+```text
+SyntaxError: js/ui/ui-state.js does not provide an export named applyGameBackgroundState
+1 failed
+```
+
+### Fix-round GREEN evidence
+
+Focused coverage passed after the fixes:
+
+```text
+node --test tests/unit/ui-state.test.js
+12 passed, 0 failed
+```
+
+The added cases cover:
+
+- Focused interactive controls are not captured as gameplay input.
+- Paused and finished sessions do not capture Space.
+- Live gameplay still captures Space and Escape.
+- WebGL capability is probed once across repeated checks.
+- The probe context is explicitly released once.
+- Paused and complete backgrounds are inert and hidden from accessibility.
+- Playing restores the background state and attributes.
+- All six legacy screen targets map to Task 8 states.
+
+The full suite passed before final reporting:
+
+```text
+npm test
+60 passed, 0 failed
+```
+
+### Fix-round browser evidence completed
+
+Verified in connected Chrome at an exact 1280 by 720 page viewport:
+
+- World 1 created one owned game canvas.
+- Escape moved playing to paused.
+- Pause exposed only one visible `data-ui-state`: `paused`.
+- The game stage had no active state value while paused.
+- The game stage and HUD each reported `aria-hidden="true"`.
+- Resume held primary focus.
+- Pressing Space on Resume returned to playing.
+- Playing restored focus to the game stage.
+- No browser errors or warnings were present in the checked log window.
+
+### Fix-round browser verification not completed
+
+The browser connection stalled twice on main-world developer probes. Both calls were stopped. No returned result was treated as evidence.
+
+The following live checks remain unverified in fix round 1:
+
+- Space activation on Continue, Replay, Retry, and error links.
+- Complete panel contrast and focus.
+- Asset-error panel contrast, filename, Retry, and focus.
+- WebGL-error panel contrast, guidance, and focus.
+- Save-recovery notice.
+- Actual browser WebGL probe context and release counts. These are deterministically unit tested only.
+- 1440 by 900 layout.
+- 1920 by 1080 layout.
+- 390 by 844 desktop blocker.
+- Reduced-motion computed styles.
+- Final local-resource and console sweep across every state.
+
+### Fix-round self-review
+
+- `shouldCaptureGameplayInput` checks session lifecycle before input mutation or default prevention.
+- Interactive focus is resolved from the event target, so descendants inside a button or link remain protected.
+- Escape still emits pause only from a running, unfinished session.
+- Keyup remains harmless after pause because pause clears held input.
+- Modal background isolation uses attributes as well as the DOM `inert` property.
+- Focus lookup sees only the modal state root during pause and completion.
+- WebGL caching is closure-local and cannot leak capability state between page loads.
+- Probe release failure cannot turn supported WebGL into an error.
+- No error-simulation methods remain on the public test hook.
+- No external request, dependency, runner, or browser package was added.
+
+### Fix-round concern
+
+The primary logic is test-backed, and Resume Space activation plus modal isolation are live-verified. The remaining browser matrix must be completed before release review. The browser-control stall is an evidence gap, not a passing result.

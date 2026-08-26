@@ -9,6 +9,27 @@ export const CHARACTERS = [
 
 const RELEASED_IDS = new Set(RELEASED_LEVELS.map(({ id }) => id));
 
+export function createWebGLCapabilityProbe(createCanvas) {
+  let cached;
+  return () => {
+    if (cached !== undefined) return cached;
+    let context = null;
+    try {
+      const canvas = createCanvas();
+      context = canvas.getContext('webgl2') || canvas.getContext('webgl');
+      cached = Boolean(context);
+    } catch {
+      cached = false;
+    }
+    try {
+      context?.getExtension?.('WEBGL_lose_context')?.loseContext?.();
+    } catch {
+      // Capability detection must not fail because explicit release is unsupported.
+    }
+    return cached;
+  };
+}
+
 export function initialUiState({
   save = createFreshSave(),
   saveRecovered = false,
@@ -30,6 +51,42 @@ export function initialUiState({
 
 export function reduceUiState(state, event) {
   switch (event.type) {
+    case 'HOOK_SHOW_SCREEN': {
+      if (event.id === 'title-screen') {
+        return { ...state, screen: 'title', error: null, completion: null };
+      }
+      if (event.id === 'char-screen') {
+        return { ...state, screen: 'characters', error: null, completion: null };
+      }
+      if (event.id === 'map-screen') {
+        return { ...state, screen: 'world', error: null, completion: null };
+      }
+      if (event.id === null) {
+        return { ...state, screen: 'playing', error: null, completion: null };
+      }
+      if (event.id === 'gameover-screen') {
+        return {
+          ...state,
+          screen: 'error',
+          error: { gameOver: true, retryable: true },
+          completion: null,
+        };
+      }
+      if (event.id === 'win-screen') {
+        return {
+          ...state,
+          screen: 'complete',
+          error: null,
+          completion: {
+            levelId: '1-2',
+            stars: state.save.best['1-2'] ?? 0,
+            stats: {},
+            worldComplete: true,
+          },
+        };
+      }
+      return state;
+    }
     case 'RETURN_TITLE':
       return { ...state, screen: 'title', error: null, completion: null };
     case 'START':
@@ -252,7 +309,11 @@ function renderCompletion(doc, completion) {
   const title = doc.getElementById('complete-title');
   const stars = doc.getElementById('complete-stars');
   const stats = doc.getElementById('complete-stats');
-  if (title) title.textContent = `${level?.name ?? 'Course'} clear!`;
+  if (title) {
+    title.textContent = completion.worldComplete
+      ? 'World 1 complete!'
+      : `${level?.name ?? 'Course'} clear!`;
+  }
   if (stars) {
     stars.textContent = `${'⭐'.repeat(completion.stars)}${'☆'.repeat(3 - completion.stars)}`;
     stars.setAttribute('aria-label', `${completion.stars} of 3 stars`);
@@ -312,6 +373,22 @@ export function formatTime(value) {
 
 let lastRenderedScreen = null;
 
+export function applyGameBackgroundState(stage, hud, screen) {
+  const playing = screen === 'playing';
+  if (playing) stage.dataset.uiState = 'playing';
+  else delete stage.dataset.uiState;
+  for (const element of [stage, hud]) {
+    element.inert = !playing;
+    if (playing) {
+      element.removeAttribute('aria-hidden');
+      element.removeAttribute('inert');
+    } else {
+      element.setAttribute('aria-hidden', 'true');
+      element.setAttribute('inert', '');
+    }
+  }
+}
+
 export function renderUi(state, { doc = document, previousScreen = lastRenderedScreen } = {}) {
   const screenIds = {
     title: 'title-screen',
@@ -327,9 +404,12 @@ export function renderUi(state, { doc = document, previousScreen = lastRenderedS
   renderCompletion(doc, state.completion);
   renderError(doc, state.error);
 
+  const gameStage = doc.getElementById('game-stage');
+  const hud = doc.getElementById('hud');
   const showsGame = ['playing', 'paused', 'complete'].includes(state.screen);
-  setVisible(doc.getElementById('game-stage'), showsGame);
-  setVisible(doc.getElementById('hud'), showsGame);
+  setVisible(gameStage, showsGame);
+  setVisible(hud, showsGame);
+  applyGameBackgroundState(gameStage, hud, state.screen);
   setVisible(doc.getElementById('loading-screen'), state.screen === 'loading');
   setVisible(doc.getElementById('pause-overlay'), state.screen === 'paused');
   setVisible(doc.getElementById('complete-overlay'), state.screen === 'complete');

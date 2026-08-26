@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { shouldCaptureGameplayInput } from '../../js/core/game-session.js';
 import { createTextureStore } from '../../js/core/texture-store.js';
-import { initialUiState, reduceUiState } from '../../js/ui/ui-state.js';
+import {
+  applyGameBackgroundState,
+  createWebGLCapabilityProbe,
+  initialUiState,
+  reduceUiState,
+} from '../../js/ui/ui-state.js';
 
 test('the release flow exposes the approved screen states', () => {
   let state = initialUiState();
@@ -106,4 +112,92 @@ test('texture failures identify the failed filename for recovery UI', async () =
     store.preload(['assets/sprites/tile_top.png']),
     (error) => error.asset === 'tile_top.png' && error.path === 'assets/sprites/tile_top.png',
   );
+});
+
+test('gameplay input leaves focused controls and paused sessions alone', () => {
+  const controlTarget = { closest: () => ({ tagName: 'BUTTON' }) };
+  const stageTarget = { closest: () => null };
+  assert.equal(shouldCaptureGameplayInput(
+    { code: 'Space', target: controlTarget },
+    { running: true, finished: false },
+  ), false);
+  assert.equal(shouldCaptureGameplayInput(
+    { code: 'Space', target: stageTarget },
+    { running: false, finished: false },
+  ), false);
+  assert.equal(shouldCaptureGameplayInput(
+    { code: 'Space', target: stageTarget },
+    { running: true, finished: true },
+  ), false);
+  assert.equal(shouldCaptureGameplayInput(
+    { code: 'Space', target: stageTarget },
+    { running: true, finished: false },
+  ), true);
+  assert.equal(shouldCaptureGameplayInput(
+    { code: 'Escape', target: stageTarget },
+    { running: true, finished: false },
+  ), true);
+});
+
+test('WebGL capability is cached and its probe context is released', () => {
+  let canvases = 0;
+  let released = 0;
+  const probe = createWebGLCapabilityProbe(() => {
+    canvases += 1;
+    return {
+      getContext: (name) => name === 'webgl2' ? {
+        getExtension: (extension) => extension === 'WEBGL_lose_context'
+          ? { loseContext: () => { released += 1; } }
+          : null,
+      } : null,
+    };
+  });
+  assert.equal(probe(), true);
+  assert.equal(probe(), true);
+  assert.equal(canvases, 1);
+  assert.equal(released, 1);
+});
+
+test('paused and complete backgrounds are inert and leave one active state root', () => {
+  const makeElement = () => ({
+    dataset: { uiState: 'playing' },
+    inert: false,
+    attributes: new Map(),
+    setAttribute(name, value) { this.attributes.set(name, value); },
+    removeAttribute(name) { this.attributes.delete(name); },
+  });
+  const stage = makeElement();
+  const hud = makeElement();
+  applyGameBackgroundState(stage, hud, 'paused');
+  assert.equal(stage.dataset.uiState, undefined);
+  assert.equal(stage.inert, true);
+  assert.equal(stage.attributes.get('aria-hidden'), 'true');
+  assert.equal(stage.attributes.has('inert'), true);
+  assert.equal(hud.inert, true);
+  assert.equal(hud.attributes.get('aria-hidden'), 'true');
+  assert.equal(hud.attributes.has('inert'), true);
+
+  applyGameBackgroundState(stage, hud, 'playing');
+  assert.equal(stage.dataset.uiState, 'playing');
+  assert.equal(stage.inert, false);
+  assert.equal(stage.attributes.has('aria-hidden'), false);
+  assert.equal(stage.attributes.has('inert'), false);
+  assert.equal(hud.inert, false);
+  assert.equal(hud.attributes.has('aria-hidden'), false);
+  assert.equal(hud.attributes.has('inert'), false);
+});
+
+test('legacy showScreen targets map onto Task 8 state values', () => {
+  const mappings = new Map([
+    ['title-screen', 'title'],
+    ['char-screen', 'characters'],
+    ['map-screen', 'world'],
+    [null, 'playing'],
+    ['gameover-screen', 'error'],
+    ['win-screen', 'complete'],
+  ]);
+  for (const [id, screen] of mappings) {
+    const next = reduceUiState(initialUiState(), { type: 'HOOK_SHOW_SCREEN', id });
+    assert.equal(next.screen, screen, String(id));
+  }
 });
