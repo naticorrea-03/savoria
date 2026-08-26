@@ -594,7 +594,7 @@ Use `header`, `main`, and `footer`. Required sections and anchors are `#hero`, `
 <a class="button button-primary" data-play href="play/">Play Savoria</a>
 ```
 
-Use the cleaned logo file and existing World 1 thumbnail. Do not add external fonts, analytics, CDNs, or requests.
+Use the unchanged licensed logo file inside a polished dark framed plaque, plus the existing World 1 thumbnail. Do not add external fonts, analytics, CDNs, or requests.
 
 - [ ] **Step 3: Move existing game markup into `play/index.html`**
 
@@ -615,9 +615,9 @@ Set `<base href="../">` so current asset and module paths remain stable. Rename 
 
 Make the World 1 map fit a 1280 by 720 viewport without vertical scrolling. Keep visible focus rings and support `prefers-reduced-motion`.
 
-- [ ] **Step 5: Fix the logo asset**
+- [x] **Step 5: Preserve and frame the logo asset**
 
-Create a transparent derivative of `assets/sprites/savoria_logo.png` that removes only the opaque black background. Preserve the painted logo pixels and source dimensions. Open it against light and dark backgrounds before replacing the original.
+Design amendment: three generated extraction attempts redrew the artwork. Keep `assets/sprites/savoria_logo.png` unchanged. Present the opaque licensed source inside an intentional dark framed plaque on landing, title, and desktop-blocker surfaces. Do not claim a transparent derivative was created.
 
 - [ ] **Step 6: Update the launcher and verify both routes**
 

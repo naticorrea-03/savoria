@@ -137,7 +137,7 @@ test('1-1 pauses, resumes with Space, and replaces its canvas on restart', async
   await expectClean(page, diagnostics);
 });
 
-test('completion unlocks 1-2 and keeps that progress after reload', async ({ page }) => {
+test('production progression unlocks, starts, pauses, and restarts 1-2', async ({ page }) => {
   const diagnostics = await monitorPage(page);
 
   await startOneOne(page);
@@ -157,7 +157,28 @@ test('completion unlocks 1-2 and keeps that progress after reload', async ({ pag
   await page.getByRole('button', { name: 'Start Adventure' }).click();
   await page.getByRole('button', { name: /^Fatsio/ }).click();
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'world');
-  await expect(page.getByRole('button', { name: /1-2 Penne Ridge/ })).toBeEnabled();
+  const penneRidge = page.getByRole('button', { name: /1-2 Penne Ridge/ });
+  await expect(penneRidge).toBeEnabled();
+
+  await penneRidge.click();
+  await expect(page.locator('#app')).toHaveAttribute('data-screen', 'playing');
+  await expect(page.locator('#hlp-num')).toHaveText('1-2');
+  await expect(page.locator('#game-stage canvas')).toHaveCount(1);
+
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#app')).toHaveAttribute('data-screen', 'paused');
+  await expect(page.locator('#game-stage canvas')).toHaveCount(1);
+  await page.keyboard.press('Space');
+  await expect(page.locator('#app')).toHaveAttribute('data-screen', 'playing');
+
+  const firstCanvas = await page.locator('#game-stage canvas').elementHandle();
+  expect(firstCanvas).not.toBeNull();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Restart course' }).click();
+  await expect(page.locator('#app')).toHaveAttribute('data-screen', 'playing');
+  await expect(page.locator('#hlp-num')).toHaveText('1-2');
+  await expect(page.locator('#game-stage canvas')).toHaveCount(1);
+  expect(await firstCanvas.evaluate((canvas) => canvas.isConnected)).toBe(false);
   await expectClean(page, diagnostics);
 });
 

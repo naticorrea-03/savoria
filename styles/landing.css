@@ -76,18 +76,26 @@ body {
 }
 
 .logo-stage {
-  background: #000;
+  background: linear-gradient(145deg, #1c140b, #050403 72%);
+  border: 1px solid rgb(242 193 78 / 72%);
+  border-radius: 1.15rem;
+  box-shadow:
+    inset 0 0 0 0.3rem rgb(255 238 190 / 7%),
+    inset 0 -1rem 2.5rem rgb(0 0 0 / 42%),
+    0 1rem 2rem rgb(0 0 0 / 35%);
   display: block;
+  position: relative;
 }
 
 .hero-logo-stage {
-  box-shadow: 0 1rem 2rem rgb(0 0 0 / 35%);
   margin-bottom: 1.5rem;
-  padding: 0.6rem 1rem;
+  padding: 0.85rem 1.1rem;
   width: min(25rem, 56vw);
 }
 
 .hero-logo {
+  border-radius: 0.45rem;
+  display: block;
   width: 100%;
 }
 

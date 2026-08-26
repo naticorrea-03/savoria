@@ -55,15 +55,22 @@ canvas {
 }
 
 .logo-stage {
-  background: #000;
+  background: linear-gradient(145deg, #1c140b, #050403 72%);
+  border: 1px solid rgb(242 193 78 / 72%);
+  border-radius: 18px;
+  box-shadow:
+    inset 0 0 0 5px rgb(255 238 190 / 7%),
+    inset 0 -16px 38px rgb(0 0 0 / 42%),
+    0 12px 28px rgb(60 20 0 / 28%);
 }
 
 .title-logo-stage {
-  box-shadow: 0 12px 28px rgb(60 20 0 / 28%);
-  padding: 12px 24px;
+  padding: 16px 26px;
 }
 
 #title-screen img.logo {
+  border-radius: 7px;
+  display: block;
   filter: drop-shadow(0 8px 18px rgb(60 20 0 / 45%));
   width: min(420px, 70vw);
 }
@@ -373,13 +380,15 @@ h1.screen-title {
 }
 
 #hud-level-panel {
-  background: url("../assets/sprites/dialog_card.png");
-  background-size: 100% 100%;
+  background: linear-gradient(150deg, rgb(255 247 220 / 96%), rgb(242 205 133 / 94%));
+  border: 2px solid rgb(90 44 10 / 84%);
   border-radius: 14px;
-  filter: drop-shadow(0 6px 14px rgb(0 0 0 / 40%));
+  box-shadow:
+    inset 0 0 0 3px rgb(255 255 255 / 28%),
+    0 6px 14px rgb(0 0 0 / 34%);
   justify-self: start;
   min-width: 254px;
-  padding: 13px 26px 12px;
+  padding: 12px 18px 11px;
 }
 
 #hlp-world { color: #5a2c0a; font-size: 18px; font-weight: 900; letter-spacing: 0.04em; }
@@ -390,16 +399,19 @@ h1.screen-title {
 
 .hud-chip {
   align-items: center;
-  background: url("../assets/sprites/hud_chip_dark.png");
-  background-size: 100% 100%;
+  background: linear-gradient(180deg, rgb(73 38 18 / 94%), rgb(30 17 10 / 94%));
+  border: 2px solid rgb(242 193 78 / 72%);
   border-radius: 999px;
+  box-shadow:
+    inset 0 1px 0 rgb(255 240 197 / 16%),
+    0 5px 14px rgb(0 0 0 / 35%);
   color: var(--parmesan);
   display: flex;
   font-size: 18px;
   font-weight: 850;
   gap: 10px;
   min-height: 48px;
-  padding: 8px 20px;
+  padding: 7px 18px;
   text-shadow: 0 1px 3px #000;
 }
 

@@ -34,7 +34,7 @@ Mobile gameplay is outside this release. Small screens will receive a clear desk
 
 The landing page introduces the game before launching it. It includes:
 
-- A cleaned Savoria logo without the opaque black rectangle.
+- The licensed Savoria source logo, unchanged, inside a polished dark framed plaque.
 - A concise game description.
 - A prominent Play button.
 - A short World 1 preview.
@@ -232,9 +232,13 @@ The implementation is ready for final release review when:
 - Only World 1 appears in the released game.
 - Both World 1 levels are completable through normal play.
 - Movement matches the approved single-jump and hold-to-run design.
-- The repeated texture warnings, opaque logo background, and map overflow are fixed.
+- The repeated texture warnings and map overflow are fixed. The opaque licensed logo is intentionally contained inside a dark framed plaque.
 - Automated tests pass.
 - Browser verification produces no unexpected warnings or errors.
 - README, CONTRIBUTING, licenses, credits, and GitHub templates are present.
 - A GitHub Pages deployment is configured but remains unpublished.
 - The repository remains private pending final approval.
+
+### Logo design amendment
+
+The original transparency requirement is withdrawn. Three generated extraction attempts redrew the licensed artwork instead of preserving its pixels. The source file at `assets/sprites/savoria_logo.png` therefore remains unchanged. Landing and game surfaces present it inside an intentional dark framed plaque. A transparent derivative is not part of this release.
