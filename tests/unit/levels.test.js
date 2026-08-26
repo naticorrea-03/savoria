@@ -38,21 +38,21 @@ test('World 1 generated data stays at the approved gameplay baseline', () => {
   assert.deepEqual(snapshotLevel(RELEASED_LEVELS[0]), {
     id: '1-1',
     spawn: [2, 4, 0],
-    checkpoint: [72.6, 0.7, 0],
-    goal: [121.6, 1, 0],
-    length: 126.6,
-    coins: 39,
+    checkpoint: [56.1, 0.2, 0],
+    goal: [96.1, 0, 0],
+    length: 101.1,
+    coins: 24,
     initialHearts: 3,
-    initialTimer: 260,
+    initialTimer: 240,
   });
 
   assert.deepEqual(snapshotLevel(RELEASED_LEVELS[1]), {
     id: '1-2',
     spawn: [2, 4, 0],
-    checkpoint: [62, 3.5, 0],
-    goal: [142.8, 3, 0],
-    length: 147.8,
-    coins: 29,
+    checkpoint: [65.5, 4.4, 0],
+    goal: [134.6, 6.5, 0],
+    length: 139.6,
+    coins: 33,
     initialHearts: 3,
     initialTimer: 280,
   });

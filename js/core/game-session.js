@@ -77,6 +77,7 @@ export class GameSession {
     this.power = null;
     this.passedCheckpoint = false;
     this.doorCooldown = 0;
+    this.shownTutorials = new Set();
 
     this.buildPlayer();
     this.attachInput();
@@ -261,6 +262,7 @@ export class GameSession {
     }
     this.applyMotion(next);
     this.findGroundMover();
+    this.updateTutorials();
 
     const playerCollider = this.getPlayerBox();
     if (!this.updateHazards(playerCollider)) return;
@@ -316,6 +318,19 @@ export class GameSession {
         player.groundMover = solid;
         return;
       }
+    }
+  }
+
+  updateTutorials() {
+    for (const tutorial of this.level.tutorials || []) {
+      if (
+        this.player.pos.x < tutorial.x
+        || this.shownTutorials.has(tutorial.id)
+      ) {
+        continue;
+      }
+      this.shownTutorials.add(tutorial.id);
+      this.emit('msg', tutorial.text);
     }
   }
 

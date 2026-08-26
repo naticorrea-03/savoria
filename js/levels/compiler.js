@@ -1,8 +1,16 @@
 const D = 10;
 
+const TUTORIAL_TEXT = Object.freeze({
+  move: 'Move',
+  jump: 'Jump',
+  run: 'Hold Shift to run',
+  stomp: 'Stomp from above',
+});
+
 export function compileSegments(def) {
   const out = {
     boxes: [], movers: [], hazards: [], coins: [], items: [], enemies: [], deco: [], doors: [],
+    tutorials: [], requiredJumps: [],
     spawn: [2, 4, 0], checkpoint: null, goal: null, boss: null, killY: -9,
     time: def.time || 300,
   };
@@ -21,8 +29,27 @@ export function compileSegments(def) {
     }
   };
 
-  for (const seg of def.segs) {
+  const addRequiredJump = (sourceIndex, kind, takeoffX, distance, opts = {}) => {
+    out.requiredJumps.push({
+      id: `${def.id}:${sourceIndex}:${out.requiredJumps.length}`,
+      sourceIndex,
+      kind,
+      takeoffX,
+      distance,
+      requiresRun: opts.requiresRun === true,
+      movingPlatform: opts.movingPlatform === true,
+      hazard: opts.hazard === true,
+    });
+  };
+
+  for (const [sourceIndex, seg] of def.segs.entries()) {
     const [kind, a, opts = {}] = seg;
+    if (opts.tutorial) {
+      const text = TUTORIAL_TEXT[opts.tutorial];
+      if (text && !out.tutorials.some((tutorial) => tutorial.id === opts.tutorial)) {
+        out.tutorials.push({ id: opts.tutorial, text, x });
+      }
+    }
     if (kind === 'run') {
       const len = a;
       const x0 = x;
@@ -43,8 +70,39 @@ export function compileSegments(def) {
       const len = a;
       if (opts.arc) arcOver(x, len, opts.arc);
       if (opts.plat) out.boxes.push([x + len / 2, g - 0.4, 0, 3.2, 0.9, 7, 'plat']);
-      if (opts.mover) out.movers.push({ box: [x + 2, g - 0.4, 0, 3.4, 0.8, 6, 'plat'], to: [len - 4, 0, 0], period: opts.period || 4 });
+      if (opts.safeGround) {
+        out.boxes.push([x + len / 2, g - 2.5, 0, len, 5, D, 'ground2']);
+      }
+      if (opts.mover) {
+        const moverY = opts.safeGround ? g + 1.1 : g - 0.4;
+        out.movers.push({
+          box: [x + 2, moverY, 0, 3.4, 0.8, 6, 'plat'],
+          to: [len - 4, 0, 0],
+          period: opts.period || 4,
+          sourceX: x,
+          safe: opts.safeGround === true,
+          hazard: opts.safeGround !== true,
+        });
+      }
       if (opts.flyer) out.enemies.push({ t: 'flyer', p: [x + len / 2, g + 3, 0], range: Math.min(len / 2, 6), axis: 'x' });
+      if (opts.mover) {
+        const approach = Math.max(0, (len - 3.4) / 2);
+        addRequiredJump(sourceIndex, kind, x, approach, {
+          requiresRun: opts.requiresRun,
+          movingPlatform: true,
+          hazard: !opts.safeGround,
+        });
+        addRequiredJump(sourceIndex, kind, x + len / 2, approach, {
+          requiresRun: opts.requiresRun,
+          movingPlatform: true,
+          hazard: !opts.safeGround,
+        });
+      } else {
+        addRequiredJump(sourceIndex, kind, x, len, {
+          requiresRun: opts.requiresRun,
+          hazard: !opts.safeGround,
+        });
+      }
       x += len;
     } else if (kind === 'rise') {
       g += a;
@@ -52,10 +110,12 @@ export function compileSegments(def) {
       const n = a, dir = opts.dir || 1;
       for (let i = 0; i < n; i++) {
         if (dir > 0) g += 1.4;
+        addRequiredJump(sourceIndex, kind, x, 3, opts);
         out.boxes.push([x + 1.5, g - 2, 0, 3, 4, D, i % 2 ? 'ground2' : 'brick']);
         if (dir < 0) g -= 1.4;
         x += 3;
       }
+      g = Math.round(g * 10) / 10;
     } else if (kind === 'river') {
       const len = a;
       out.hazards.push([x + len / 2, g - 3.4, 0, len, D + 4]);
@@ -64,6 +124,13 @@ export function compileSegments(def) {
         const hx = x + (len * i) / (hops + 1);
         out.boxes.push([hx, g - 0.3 + (i % 2) * 0.7, 0, 3, 0.9, 6, 'plat']);
         out.coins.push([hx, g + 1.8 + (i % 2) * 0.7, 0]);
+      }
+      const centerSpacing = len / (hops + 1);
+      const landingGap = Math.max(0, centerSpacing - 1.5);
+      for (let i = 0; i <= hops; i++) {
+        addRequiredJump(sourceIndex, kind, x + centerSpacing * i, landingGap, {
+          hazard: true,
+        });
       }
       if (opts.flyer) out.enemies.push({ t: 'flyer', p: [x + len / 2, g + 4, 0], range: len / 2 - 2, axis: 'x' });
       x += len;
@@ -109,6 +176,7 @@ export function compileSegments(def) {
       const n = a;
       let top = g + 1.2;
       for (let i = 0; i < n; i++) {
+        addRequiredJump(sourceIndex, kind, x, i === 0 ? 1.75 : 2.5, opts);
         out.boxes.push([x + 1.75, top - 6, 0, 3.5, 12, 6.5, i % 2 ? 'ground2' : 'brick']);
         out.coins.push([x + 1.75, top + 1.4, 0]);
         if (i < n - 1) out.coins.push([x + 4.4, top + 2.4, 0]);
