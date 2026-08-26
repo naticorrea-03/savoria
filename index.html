@@ -15,7 +15,7 @@
     <nav class="site-nav" aria-label="Main navigation">
       <a href="#world-one">World 1</a>
       <a href="#controls">Controls</a>
-      <a href="#contribute">Add a level</a>
+      <a href="#contribute">Revise a course</a>
       <a class="nav-play" data-play href="play/">Play</a>
     </nav>
   </header>
@@ -49,7 +49,7 @@
         <div class="world-copy">
           <p class="eyebrow">World 1 is ready</p>
           <h2>Pasta Plains</h2>
-          <p>Two hand-built courses. Three chefs. One hungry mushroom boss.</p>
+          <p>Two hand-built courses. Three chefs. One World 1 map.</p>
           <ol class="course-list">
             <li><span>1-1</span> Farfalle Fields</li>
             <li><span>1-2</span> Penne Ridge</li>
@@ -84,15 +84,21 @@
     <section class="landing-section" id="contribute">
       <div class="contribute-panel">
         <div class="contribute-copy">
-          <p class="eyebrow">Add a level</p>
-          <h2>Write a recipe. Build a course.</h2>
-          <p>Levels are short lists of familiar pieces. You shape the route. Savoria handles the game world.</p>
+          <p class="eyebrow">Improve a course</p>
+          <h2>Start with a course revision.</h2>
+          <p>Revise 1-1 or 1-2 first. Propose a new released course before adding it.</p>
           <a class="button button-secondary" href="https://github.com/nataliacorrea03/savoria">See the project on GitHub</a>
         </div>
-        <pre class="recipe" aria-label="Example level recipe"><code>level(1, 3, 'Your Course', 'pasta', 240, [
-  ['run', 18, { coins: 5 }],
-  ['gap', 3, { arc: 4 }],
+        <pre class="recipe" aria-label="Current Farfalle Fields recipe"><code>level(1, 1, 'Farfalle Fields', 'pasta', 240, [
+  ['run', 12, { coins: 5, tutorial: 'move', deco: 'cypress' }],
+  ['run', 6, { tutorial: 'jump' }],
+  ['gap', 3.5, { arc: 5 }],
+  ['run', 14, { enemy: 'meatball', tutorial: 'stomp', deco: 'windmill', decoS: 1.2 }],
+  ['blocks', 3],
   ['checkpoint', 0],
+  ['river', 9],
+  ['run', 16, { tutorial: 'run', coins: 4, deco: 'cypress' }],
+  ['gap', 5, { arc: 5, requiresRun: true }],
   ['goal', 0]
 ]);</code></pre>
       </div>

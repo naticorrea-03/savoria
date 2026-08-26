@@ -16,22 +16,30 @@ Controls: A/D or Left/Right to move, Shift to run, Space or Up to jump, and Esca
 
 ## Why the browser build
 
-Savoria began as a Godot project. That work shaped the game art and direction. The current browser build makes a course easy to review, run locally, and change through a compact level recipe. Both versions are part of the project story.
+Savoria began as a Godot project. That work shaped the game art and direction. Its GUI scene trees and export process made text review and contribution slower. The browser build keeps levels as data, which makes review simple and local play build-free. Both versions are part of the project story.
 
 ## How levels work
 
 A level is data. `js/levels/validate.js` checks the recipe, `js/levels/compiler.js` turns it into neutral game data, and the runtime renders it.
 
-World 1 definitions live in [`js/levels/world-one.js`](./js/levels/world-one.js). This is a valid compact recipe in that file:
+World 1 definitions live in [`js/levels/world-one.js`](./js/levels/world-one.js). This is the current compact definition for released course 1-1:
 
 ```js
-level(1, 3, 'Your Course', 'pasta', 240, [
-  ['run', 18, { coins: 5 }],
-  ['gap', 3, { arc: 4 }],
+level(1, 1, 'Farfalle Fields', 'pasta', 240, [
+  ['run', 12, { coins: 5, tutorial: 'move', deco: 'cypress' }],
+  ['run', 6, { tutorial: 'jump' }],
+  ['gap', 3.5, { arc: 5 }],
+  ['run', 14, { enemy: 'meatball', tutorial: 'stomp', deco: 'windmill', decoS: 1.2 }],
+  ['blocks', 3],
   ['checkpoint', 0],
+  ['river', 9],
+  ['run', 16, { tutorial: 'run', coins: 4, deco: 'cypress' }],
+  ['gap', 5, { arc: 5, requiresRun: true }],
   ['goal', 0],
 ]);
 ```
+
+The starter contribution flow revises one existing released course, 1-1 or 1-2. A new released course needs a proposal and explicit release-test updates. The current test suite does not accept a drop-in `1-3` course.
 
 Supported primitives are `run`, `gap`, `rise`, `steps`, `river`, `plats`, `roll`, `blocks`, `tier`, `pillars`, `bonus`, `checkpoint`, `goal`, and `boss`.
 
