@@ -1,6 +1,7 @@
 // Savoria 3D — UI state machine: menus, world map, HUD, lives, progression.
 import { Game, sfx } from './game.js?v=2';
 import { LEVELS, WORLDS, buildLevel } from './levels.js?v=2';
+import { loadSave, writeSave, recordCompletion } from './ui/save-store.js';
 
 const $ = (id) => document.getElementById(id);
 const app = $('app');
@@ -12,18 +13,12 @@ const CHARS = [
 ];
 
 // ── save data ──
-const SAVE_KEY = 'savoria3d-save-v2';
-function loadSave() {
-  try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch { return {}; }
-}
-function saveData(d) { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); }
-let save = loadSave();
-save.unlocked = save.unlocked ?? 1;   // number of levels playable (sequential)
-save.best = save.best || {};          // levelId -> stars
+const loaded = loadSave(localStorage);
+let save = loaded.save;
 
 // ── run state ──
 let game = null;
-let currentChar = CHARS[0];
+let currentChar = CHARS.find((char) => char.id === save.chef) ?? CHARS[0];
 let currentLevel = 0;   // index into LEVELS
 let lives = 4;
 
@@ -54,6 +49,7 @@ function hudMsg(text, ms = 2200) {
   clearTimeout(msgTimer);
   msgTimer = setTimeout(() => { el.style.opacity = 0; }, ms);
 }
+if (loaded.recovered) hudMsg('Save repaired');
 
 const POWER_ICONS = {
   speed: 'assets/sprites/speed_pasta.png',
@@ -154,9 +150,8 @@ function onComplete(stats) {
   const coinPct = stats.totalCoins ? stats.coins / stats.totalCoins : 1;
   const stars = 1 + (coinPct >= 0.6 ? 1 : 0) + (stats.hearts >= 2 ? 1 : 0);
   const id = LEVELS[currentLevel].id;
-  save.best[id] = Math.max(save.best[id] || 0, stars);
-  save.unlocked = Math.max(save.unlocked, Math.min(currentLevel + 2, LEVELS.length));
-  saveData(save);
+  save = recordCompletion(save, id, stars, currentLevel + 2);
+  writeSave(localStorage, save);
 
   $('complete-title').textContent = stats.isBoss ? 'The Don is Toast!' : 'Course Clear!';
   $('complete-stars').textContent = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
@@ -175,7 +170,14 @@ function buildCharScreen() {
     const card = document.createElement('div');
     card.className = 'char-card';
     card.innerHTML = `<img src="${c.img}"><div class="name">${c.name}</div><div class="desc">${c.desc}</div>`;
-    card.onclick = () => { currentChar = c; sfx.coin(); buildMapScreen(); show('map-screen'); };
+    card.onclick = () => {
+      currentChar = c;
+      save = { ...save, chef: c.id };
+      writeSave(localStorage, save);
+      sfx.coin();
+      buildMapScreen();
+      show('map-screen');
+    };
     row.appendChild(card);
   }
 }
