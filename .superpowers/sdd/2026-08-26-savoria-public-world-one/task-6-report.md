@@ -4,6 +4,8 @@
 
 Implementation complete from base commit `f3a627d`.
 
+Fix round 1 is complete on top of extraction commit `d49f4f8a94b1fa579b3aa2cceb6954655d483e21`.
+
 Planned commit message:
 
 ```text
@@ -218,3 +220,78 @@ No WebGL context warning appeared.
 There is no installed local Playwright package at this task boundary. That dependency belongs to Task 9. The attempted local import failed with `ERR_MODULE_NOT_FOUND`, so browser lifecycle verification used the available real Chrome browser against the local server instead. No dependency was installed.
 
 No blocking implementation concerns remain.
+
+## Fix Round 1
+
+### Reviewer findings resolved
+
+- `stepPlayerMotion()` again auto-steps onto terrain lips above `-0.05` and at or below `0.55` while descending or grounded. These are the exact deleted-coordinator thresholds.
+- Respawn now calls `InputState.clearTransient()`. It clears buffered jump intent while retaining physically held A, D, arrow, and Shift keys.
+- Pause, resume, blur, and destruction still call `InputState.clear()`, which releases every held key and clears jump state.
+- Checkpoint activation mutates the existing material color. It no longer allocates an unowned replacement material.
+- The fixed simulation again calls `updateBoss()` before `updateEntities()`, matching the base runtime order.
+
+### Additional automated coverage
+
+The terrain and held-input assertions were added before their production fixes.
+
+Focused RED command:
+
+```sh
+node --test tests/unit/player-motion.test.js tests/unit/input-state.test.js
+```
+
+Result: 12 passed and 2 failed. The terrain test received `positionY: -0.008333333333333333` instead of `0.5`, and the input test reported that `clearTransient` did not exist.
+
+Focused GREEN command:
+
+```sh
+node --test tests/unit/player-motion.test.js tests/unit/input-state.test.js
+```
+
+Result: 14 passed and 0 failed.
+
+The final unit suite includes these new regressions:
+
+- A moving grounded player crosses a half-unit rise, lands at `y = 0.5`, and retains horizontal velocity.
+- Clearing transient input retains held D movement and removes the buffered jump.
+- Checkpoint activation retains the exact material object, sets color `0xf2c14e`, and marks the checkpoint passed.
+- Existing stale-preload progress coverage remains active.
+- Existing fixed-step cap and render-count coverage remains active.
+
+Final unit command:
+
+```sh
+npm run test:unit
+```
+
+Result: 31 passed and 0 failed.
+
+### Fix-round browser evidence
+
+A fresh real Chrome run used the local route at `http://127.0.0.1:8977/play/`.
+
+- Level 1-1 walked from the `y = 0` platform onto the generated `y = 0.5` rise. Final state: `x = 19.395`, `y = 0.5`, grounded, with positive horizontal velocity.
+- Level 1-2 walked from the `y = 0` platform onto its generated `y = 0.5` rise. Final state: `x = 18.1867`, `y = 0.5`, grounded, with positive horizontal velocity.
+- D remained physically held during death. Immediately after respawn, input axis remained `1` and held keys still contained `KeyD`. Without another keydown, player X advanced from `2` to `4.975`.
+- Level 1-2 checkpoint activation showed `Checkpoint! 🚩`. The material reference stayed identical and its color became `f2c14e`.
+- Moving the player into the goal showed the visible `Course Clear!` overlay and set the session finished state.
+- Replay created one canvas. Pause then restart retained one canvas. Pause then Level Select left zero canvases.
+- `window.__game` and `window.__ui` remained absent. `window.__savoriaTest` exposed only `startLevel`, `showScreen`, `releasedLevels`, and `session`.
+- Chrome warning and error logs after the run: `0`.
+
+Temporary player positioning and keyboard-event dispatch were used inside this local browser session to isolate each gameplay scenario. These test setup changes were not written to source files.
+
+### Fix-round self-review
+
+- Compared the restored step-up branch to the deleted coordinator thresholds and order.
+- Confirmed the pure motion regression fails without the branch.
+- Confirmed full input clearing remains unchanged outside respawn.
+- Confirmed checkpoint activation does not transfer or abandon material ownership.
+- Confirmed boss processing precedes entity and particle processing.
+- Confirmed the browser restart and quit path destroys the prior canvas.
+- Confirmed no dependency was installed and no external request was added.
+
+### Fix-round concerns
+
+No new blocking concern was found. Browser setup used the existing real Chrome control surface because local Playwright remains intentionally uninstalled until Task 9.

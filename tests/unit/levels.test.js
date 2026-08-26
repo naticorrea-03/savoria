@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { INITIAL_HEARTS } from '../../js/core/game-session.js';
+import { sfx } from '../../js/audio/sfx.js';
+import { GameSession, INITIAL_HEARTS } from '../../js/core/game-session.js';
 import { RELEASED_LEVELS, RELEASED_WORLDS, buildReleasedLevel } from '../../js/levels/index.js';
 import { validateLevelDefinition } from '../../js/levels/validate.js';
 
@@ -55,4 +56,40 @@ test('World 1 generated data stays at the approved gameplay baseline', () => {
     initialHearts: 3,
     initialTimer: 280,
   });
+});
+
+test('checkpoint activation mutates the owned material instead of replacing it', () => {
+  let activatedColor = null;
+  const material = {
+    color: {
+      set(color) {
+        activatedColor = color;
+      },
+    },
+  };
+  const session = {
+    player: {
+      pos: {
+        x: 10,
+        y: 2,
+      },
+    },
+    level: { checkpoint: [10, 2, 0] },
+    passedCheckpoint: false,
+    checkpointFlag: { material },
+    goalObject: null,
+    emit() {},
+  };
+  const originalPower = sfx.power;
+  sfx.power = () => {};
+
+  try {
+    GameSession.prototype.updateCheckpointAndGoal.call(session, 1 / 60);
+  } finally {
+    sfx.power = originalPower;
+  }
+
+  assert.equal(session.checkpointFlag.material, material);
+  assert.equal(activatedColor, 0xf2c14e);
+  assert.equal(session.passedCheckpoint, true);
 });

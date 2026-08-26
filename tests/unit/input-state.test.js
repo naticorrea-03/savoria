@@ -33,6 +33,17 @@ test('clear removes held input and buffered jumps', () => {
   assert.equal(input.consumeJump(), false);
 });
 
+test('clearing transient input preserves physically held movement', () => {
+  const input = new InputState();
+  input.press('KeyD');
+  input.press('Space');
+
+  input.clearTransient();
+
+  assert.equal(input.axis, 1);
+  assert.equal(input.consumeJump(), false);
+});
+
 test('expired jump input cannot be consumed', () => {
   const input = new InputState();
   input.press('Space');

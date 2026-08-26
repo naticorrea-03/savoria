@@ -47,6 +47,10 @@ export class InputState {
 
   clear() {
     this.held.clear();
+    this.clearTransient();
+  }
+
+  clearTransient() {
     this.jumpBuffer = 0;
   }
 }

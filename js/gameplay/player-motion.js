@@ -97,6 +97,12 @@ function resolveMovement(state, solids, dt) {
     for (const solid of solids) {
       const collider = solid.aabb || solid;
       if (!box.intersects(collider)) continue;
+      const lip = collider.maxY - state.positionY;
+      if (lip > -0.05 && lip <= 0.55 && state.velocityY <= 0.01) {
+        state.positionY = Math.max(state.positionY, collider.maxY);
+        setBox();
+        continue;
+      }
       const leftPenetration = box.maxX - collider.minX;
       const rightPenetration = collider.maxX - box.minX;
       state.positionX = leftPenetration < rightPenetration

@@ -89,3 +89,22 @@ test('landing on a solid restores grounded state', () => {
   assert.equal(next.velocityY, 0);
   assert.equal(next.grounded, true);
 });
+
+test('ground movement steps onto a half-unit terrain rise without stopping', () => {
+  const world = { solids: [{ aabb: new AABB(0.8, 0, 0, 0.6, 1, 2) }] };
+  const next = stepPlayerMotion(
+    createPlayerMotion({
+      positionX: 0.05,
+      positionY: 0,
+      velocityX: DEFAULT_MOTION.walkSpeed,
+      grounded: true,
+    }),
+    { axis: 1, running: false },
+    world,
+    1 / 60,
+  );
+
+  assert.equal(next.positionY, 0.5);
+  assert.ok(next.positionX > 0.05);
+  assert.ok(next.velocityX > 0);
+});

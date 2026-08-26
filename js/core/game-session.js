@@ -267,8 +267,8 @@ export class GameSession {
     this.updateDoors(dt);
     if (this.updateCheckpointAndGoal(dt)) return;
 
-    updateEntities(this, dt);
     updateBoss(this, dt);
+    updateEntities(this, dt);
     player.invuln = this.invuln;
     animateChefRig(this.rig, player, this.elapsed, dt, BASE_ANIMATION_SPEED);
     this.updateShadow();
@@ -386,7 +386,7 @@ export class GameSession {
       && Math.abs(player.pos.y - this.level.checkpoint[1]) < 3.5
     ) {
       this.passedCheckpoint = true;
-      this.checkpointFlag.material = new THREE.MeshLambertMaterial({ color: 0xf2c14e });
+      this.checkpointFlag.material.color.set(0xf2c14e);
       this.emit('msg', 'Checkpoint! 🚩');
       sfx.power();
     }
@@ -471,7 +471,7 @@ export class GameSession {
     player.grounded = false;
     player.coyote = 0;
     player.groundMover = null;
-    this.input.clear();
+    this.input.clearTransient();
     this.invuln = 2;
   }
 
