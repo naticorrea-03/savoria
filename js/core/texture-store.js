@@ -1,15 +1,33 @@
+export class AssetLoadError extends Error {
+  constructor(path, cause) {
+    const pathname = String(path).split(/[?#]/, 1)[0];
+    const asset = pathname.split('/').filter(Boolean).at(-1) ?? String(path);
+    super(`Could not load required asset: ${asset}`, { cause });
+    this.name = 'AssetLoadError';
+    this.asset = asset;
+    this.path = path;
+  }
+}
+
 export function createTextureStore({ THREE, loader, baseUrl }) {
   const originals = new Map();
   const clones = new Set();
 
   async function preload(paths, onProgress = () => {}) {
     let loaded = 0;
-    await Promise.all([...new Set(paths)].map(async (path) => {
-      const value = await loader.loadAsync(new URL(path, baseUrl).href);
-      value.colorSpace = THREE.SRGBColorSpace;
-      originals.set(path, value);
-      onProgress(++loaded, paths.length);
+    const uniquePaths = [...new Set(paths)];
+    const results = await Promise.allSettled(uniquePaths.map(async (path) => {
+      try {
+        const value = await loader.loadAsync(new URL(path, baseUrl).href);
+        value.colorSpace = THREE.SRGBColorSpace;
+        originals.set(path, value);
+        onProgress(++loaded, uniquePaths.length);
+      } catch (error) {
+        throw new AssetLoadError(path, error);
+      }
     }));
+    const failed = results.find((result) => result.status === 'rejected');
+    if (failed) throw failed.reason;
   }
 
   function texture(path) {

@@ -1,4 +1,3 @@
-// Savoria 3D UI state machine: menus, world map, HUD, lives, progression.
 import * as THREE from '../../vendor/three.module.js';
 import { sfx } from '../audio/sfx.js';
 import { GameSession } from '../core/game-session.js';
@@ -10,68 +9,56 @@ import {
   buildReleasedLevel,
 } from '../levels/index.js';
 import { createActiveProgressReporter } from './level-loading.js';
-import { loadSave, writeSave, recordCompletion } from './save-store.js';
+import { loadSave, writeSave } from './save-store.js';
+import {
+  CHARACTERS,
+  formatTime,
+  initialUiState,
+  reduceUiState,
+  renderUi,
+} from './ui-state.js';
 
 const $ = (id) => document.getElementById(id);
 const app = $('app');
-
-const CHARS = [
-  { id: 'fatsio', name: 'Fatsio', desc: 'Big heart, bigger appetite.', img: 'assets/sprites/fatsio.png' },
-  { id: 'dinnerette', name: 'Dinnerette', desc: 'Royalty with a whisk.', img: 'assets/sprites/dinnerette.png' },
-  { id: 'chefno', name: 'Chefno', desc: 'Small chef, huge flavor.', img: 'assets/sprites/chefno.png' },
-];
-
-// ── save data ──
+const gameStage = $('game-stage');
 const loaded = loadSave(localStorage);
-let save = loaded.save;
-let saveRepairPending = loaded.recovered;
+if (loaded.recovered) writeSave(localStorage, loaded.save);
 
-// ── run state ──
+let uiState = initialUiState({
+  save: loaded.save,
+  saveRecovered: loaded.recovered,
+});
 let session = null;
-let currentChar = CHARS.find((char) => char.id === save.chef) ?? CHARS[0];
-let currentLevel = 0;   // index into RELEASED_LEVELS
 let lives = 4;
 let levelStartId = 0;
-
-// ── screens ──
-const screens = ['title-screen', 'char-screen', 'map-screen', 'gameover-screen', 'win-screen'];
-function showScreen(id) {
-  screens.forEach((s) => $(s).classList.toggle('hidden', s !== id));
-  $('hud').classList.add('hidden');
-  $('pause-overlay').classList.add('hidden');
-  $('complete-overlay').classList.add('hidden');
-  if (id) $(id).classList.add('fade-in');
-  if (document.activeElement?.blur) document.activeElement.blur();
-}
-
-// ── HUD ──
-function renderHearts(n) {
-  $('hud-hearts').textContent = '❤️'.repeat(Math.max(0, n)) + '🖤'.repeat(Math.max(0, 3 - n));
-}
-function fmtTime(t) {
-  const m = Math.floor(t / 60), s = Math.floor(t % 60);
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
 let msgTimer = null;
-function hudMsg(text, ms = 2200) {
-  const el = $('hud-msg');
-  el.textContent = text;
-  el.style.opacity = 1;
+
+function dispatch(event) {
+  const previous = uiState;
+  const next = reduceUiState(previous, event);
+  if (next === previous) return false;
+  uiState = next;
+  if (next.save !== previous.save) writeSave(localStorage, next.save);
+  renderUi(next, { previousScreen: previous.screen });
+  if (next.screen === 'world') $('map-lives').textContent = String(lives);
+  return true;
+}
+
+function renderHearts(count) {
+  const hearts = $('hud-hearts');
+  const safeCount = Math.max(0, count);
+  hearts.textContent = '❤️'.repeat(safeCount) + '🖤'.repeat(Math.max(0, 3 - safeCount));
+  hearts.setAttribute('aria-label', `${safeCount} hearts`);
+}
+
+function hudMsg(text, duration = 2200) {
+  const message = $('hud-msg');
+  message.textContent = text;
+  message.style.opacity = 1;
   clearTimeout(msgTimer);
-  msgTimer = setTimeout(() => { el.style.opacity = 0; }, ms);
-}
-
-function showLoadProgress(progress) {
-  hudMsg(`Loading ${Math.round(progress * 100)}%`, 500);
-}
-
-function showInitialHudMessage(levelName) {
-  if (saveRepairPending) {
-    saveRepairPending = false;
-    hudMsg('Save repaired', 2600);
-    return;
-  }
-  hudMsg(levelName, 2600);
+  msgTimer = setTimeout(() => {
+    message.style.opacity = 0;
+  }, duration);
 }
 
 const POWER_ICONS = {
@@ -82,222 +69,318 @@ const POWER_ICONS = {
 
 function onGameEvent(type, data) {
   switch (type) {
-    case 'coins': {
-      $('tomato-count').textContent = data;
-      if (data > 0 && data % 100 === 0) { lives++; $('life-count').textContent = lives; hudMsg('Extra chef! +1 life 👨‍🍳'); }
+    case 'coins':
+      $('tomato-count').textContent = String(data);
+      if (data > 0 && data % 100 === 0) {
+        lives += 1;
+        hudMsg('Extra chef! +1 life 👨‍🍳');
+      }
       break;
-    }
-    case 'hearts': renderHearts(data); break;
-    case 'timer': $('timer-text').textContent = fmtTime(data); break;
-    case 'msg': hudMsg(data); break;
+    case 'hearts':
+      renderHearts(data);
+      break;
+    case 'timer':
+      $('timer-text').textContent = formatTime(data);
+      break;
+    case 'msg':
+      hudMsg(data);
+      break;
     case 'flash': {
-      const f = $('hurt-flash');
-      f.style.opacity = 0.55;
-      setTimeout(() => { f.style.opacity = 0; }, 180);
+      const flash = $('hurt-flash');
+      flash.style.opacity = 0.55;
+      setTimeout(() => { flash.style.opacity = 0; }, 180);
       break;
     }
     case 'power': {
-      const el = $('hud-power');
-      if (!data) { el.style.display = 'none'; break; }
-      el.style.display = 'flex';
+      const power = $('hud-power');
+      if (!data) {
+        power.style.display = 'none';
+        break;
+      }
+      power.style.display = 'flex';
       $('power-icon').src = POWER_ICONS[data.type];
-      $('power-time').textContent = Math.ceil(data.t) + 's';
+      $('power-icon').alt = `${data.type} power`;
+      $('power-time').textContent = `${Math.ceil(data.t)}s`;
       break;
     }
     case 'bossShow':
-    case 'bossHp': {
+    case 'bossHp':
       $('hud-boss').style.display = 'flex';
-      $('boss-fill').style.width = (data.hp / data.maxHp) * 100 + '%';
-      if (data.hp <= 0) setTimeout(() => { $('hud-boss').style.display = 'none'; }, 1200);
+      $('boss-fill').style.width = `${(data.hp / data.maxHp) * 100}%`;
+      if (data.hp <= 0) {
+        setTimeout(() => { $('hud-boss').style.display = 'none'; }, 1200);
+      }
       break;
-    }
-    case 'pause': pauseGame(); break;
-    case 'died': onDied(); break;
-    case 'complete': onComplete(data); break;
+    case 'pause':
+      if (dispatch({ type: 'PAUSE' })) session?.pause();
+      break;
+    case 'died':
+      onDied();
+      break;
+    case 'complete':
+      onComplete(data);
+      break;
   }
 }
 
-// ── session lifecycle ──
-async function startLevel(idx) {
+function hasWebGL() {
+  try {
+    const canvas = document.createElement('canvas');
+    return Boolean(canvas.getContext('webgl2') || canvas.getContext('webgl'));
+  } catch {
+    return false;
+  }
+}
+
+function failedAssetName(error) {
+  if (error?.asset) return error.asset;
+  const path = String(error?.path ?? 'unknown-asset');
+  return path.split(/[/?#]/).filter(Boolean).at(-1) ?? 'unknown-asset';
+}
+
+async function startLevel(index) {
+  const definition = RELEASED_LEVELS[index];
+  if (!definition) return;
+  if (uiState.screen !== 'loading') {
+    const selected = dispatch({
+      type: 'SELECT_LEVEL',
+      levelId: definition.id,
+      levelIndex: index,
+    });
+    if (!selected) return;
+  }
+
   const startId = ++levelStartId;
+  if (!hasWebGL()) {
+    if (startId === levelStartId) dispatch({ type: 'WEBGL_FAILED' });
+    return;
+  }
+
   const textures = createTextureStore({
     THREE,
     loader: new THREE.TextureLoader(),
     baseUrl: document.baseURI,
   });
+
   try {
     await textures.preload(
       WORLD_ONE_ASSETS,
-      createActiveProgressReporter(startId, () => levelStartId, showLoadProgress),
+      createActiveProgressReporter(
+        startId,
+        () => levelStartId,
+        (progress) => dispatch({ type: 'LOAD_PROGRESS', progress }),
+      ),
     );
   } catch (error) {
     textures.dispose();
-    if (startId === levelStartId) hudMsg('Could not load level');
-    console.error('Could not preload game textures', error);
+    if (startId === levelStartId) {
+      dispatch({ type: 'LOAD_FAILED', asset: failedAssetName(error) });
+    }
     return;
   }
+
   if (startId !== levelStartId) {
     textures.dispose();
     return;
   }
-  if (session) { session.destroy(); session = null; }
-  currentLevel = idx;
-  const level = buildReleasedLevel(RELEASED_LEVELS[idx]);
-  session = new GameSession({
-    container: app,
-    level,
-    characterId: currentChar.id,
-    textures,
-    emit: onGameEvent,
-  });
-  showScreen(null);
-  $('hud').classList.remove('hidden');
+
+  const level = buildReleasedLevel(definition);
+  let nextSession;
+  try {
+    nextSession = new GameSession({
+      container: gameStage,
+      level,
+      characterId: uiState.save.chef,
+      textures,
+      emit: onGameEvent,
+    });
+  } catch (error) {
+    textures.dispose();
+    if (startId === levelStartId) dispatch({ type: 'WEBGL_FAILED' });
+    return;
+  }
+
+  session?.destroy();
+  session = nextSession;
   renderHearts(3);
   $('tomato-count').textContent = '0';
-  $('life-count').textContent = lives;
-  $('timer-text').textContent = fmtTime(level.time);
-  const def = RELEASED_LEVELS[idx];
-  const wdef = RELEASED_WORLDS.find((w) => w.n === def.world);
-  $('hlp-world').textContent = wdef.name.toUpperCase();
-  $('hlp-num').textContent = `${def.world}-${def.idx}`;
-  $('hlp-name').textContent = def.name.replace(/^\d+-\d+\s*/, '');
-  const st = save.best[def.id] || 0;
-  $('hlp-stars').textContent = '⭐'.repeat(st) + '☆'.repeat(3 - st);
-  $('hud-chef').src = currentChar.img;
+  $('timer-text').textContent = formatTime(level.time);
+  const world = RELEASED_WORLDS.find(({ n }) => n === definition.world);
+  $('hlp-world').textContent = world.name.toUpperCase();
+  $('hlp-num').textContent = definition.id;
+  $('hlp-name').textContent = definition.name;
+  const stars = uiState.save.best[definition.id] ?? 0;
+  $('hlp-stars').textContent = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
+  $('hlp-stars').setAttribute('aria-label', `${stars} of 3 course stars`);
   $('hud-power').style.display = 'none';
   $('hud-boss').style.display = 'none';
-  showInitialHudMessage(level.name);
+  dispatch({ type: 'LOAD_READY' });
+  hudMsg(level.name, 2600);
   session.start();
 }
 
-function pauseGame() {
-  if (!session || session.finished) return;
-  session.pause();
-  $('pause-overlay').classList.remove('hidden');
-}
-function resumeGame() {
-  $('pause-overlay').classList.add('hidden');
-  if (document.activeElement?.blur) document.activeElement.blur();
-  session?.resume();
-}
-
 function onDied() {
-  lives--;
-  $('life-count').textContent = lives;
+  lives -= 1;
   if (lives <= 0) {
-    setTimeout(() => { session?.destroy(); session = null; showScreen('gameover-screen'); }, 900);
-  } else {
-    hudMsg('Ouch! Chefs left: ' + lives, 2000);
-    setTimeout(() => startLevel(currentLevel), 1100);
+    const endedSession = session;
+    setTimeout(() => {
+      if (session !== endedSession) return;
+      session?.destroy();
+      session = null;
+      dispatch({ type: 'GAME_OVER' });
+    }, 900);
+    return;
   }
+
+  hudMsg(`Ouch! Chefs left: ${lives}`, 2000);
+  const endedSession = session;
+  setTimeout(() => {
+    if (session !== endedSession) return;
+    dispatch({ type: 'REPLAY' });
+    startLevel(uiState.selectedLevelIndex);
+  }, 1100);
 }
 
 function onComplete(stats) {
-  const coinPct = stats.totalCoins ? stats.coins / stats.totalCoins : 1;
-  const stars = 1 + (coinPct >= 0.6 ? 1 : 0) + (stats.hearts >= 2 ? 1 : 0);
-  const id = RELEASED_LEVELS[currentLevel].id;
-  save = recordCompletion(save, id, stars, currentLevel + 2);
-  writeSave(localStorage, save);
-
-  $('complete-title').textContent = stats.isBoss ? 'The Don is Toast!' : 'Course Clear!';
-  $('complete-stars').textContent = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
-  $('complete-stats').innerHTML =
-    `🍅 ${stats.coins} / ${stats.totalCoins} tomatoes<br>⏱ ${fmtTime(stats.time)}`;
-  $('btn-next').textContent = stats.isBoss ? 'Finish' : (currentLevel + 1 < RELEASED_LEVELS.length ? 'Next Level →' : 'World Map');
-  $('complete-overlay').classList.remove('hidden');
-  $('complete-overlay').dataset.isboss = stats.isBoss ? '1' : '';
+  const coinPercent = stats.totalCoins ? stats.coins / stats.totalCoins : 1;
+  const stars = 1 + (coinPercent >= 0.6 ? 1 : 0) + (stats.hearts >= 2 ? 1 : 0);
+  dispatch({
+    type: 'COURSE_COMPLETE',
+    levelId: uiState.selectedLevelId,
+    stars,
+    stats,
+  });
 }
 
-// ── screen builders ──
-function buildCharScreen() {
-  const row = $('char-cards');
-  row.innerHTML = '';
-  for (const c of CHARS) {
-    const card = document.createElement('div');
-    card.className = 'char-card';
-    card.innerHTML = `<img src="${c.img}"><div class="name">${c.name}</div><div class="desc">${c.desc}</div>`;
-    card.onclick = () => {
-      currentChar = c;
-      save = { ...save, chef: c.id };
-      writeSave(localStorage, save);
+function cancelLevel() {
+  levelStartId += 1;
+  session?.destroy();
+  session = null;
+}
+
+function handleAction(action, target, event) {
+  switch (action) {
+    case 'start':
+      sfx.ensure();
       sfx.coin();
-      buildMapScreen();
-      showScreen('map-screen');
-    };
-    row.appendChild(card);
+      dispatch({ type: 'START' });
+      break;
+    case 'choose-character':
+      sfx.coin();
+      dispatch({ type: 'CHOOSE_CHARACTER', characterId: target.dataset.characterId });
+      break;
+    case 'back-to-characters':
+      dispatch({ type: 'BACK_TO_CHARACTERS' });
+      break;
+    case 'select-level': {
+      const index = Number(target.dataset.levelIndex);
+      const selected = dispatch({
+        type: 'SELECT_LEVEL',
+        levelId: target.dataset.levelId,
+        levelIndex: index,
+      });
+      if (selected) {
+        sfx.coin();
+        startLevel(index);
+      }
+      break;
+    }
+    case 'resume':
+      if (dispatch({ type: 'RESUME' })) session?.resume();
+      break;
+    case 'replay':
+      if (dispatch({ type: 'REPLAY' })) startLevel(uiState.selectedLevelIndex);
+      break;
+    case 'quit-to-world':
+      event?.preventDefault();
+      cancelLevel();
+      lives = 4;
+      dispatch({ type: 'QUIT_TO_WORLD' });
+      break;
+    case 'continue':
+      cancelLevel();
+      dispatch({ type: 'CONTINUE' });
+      break;
+    case 'retry': {
+      const wasGameOver = Boolean(uiState.error?.gameOver);
+      const retried = dispatch({ type: 'RETRY' });
+      if (retried) {
+        if (wasGameOver) lives = 4;
+        startLevel(uiState.selectedLevelIndex);
+      }
+      break;
+    }
+    case 'dismiss-notice':
+      dispatch({ type: 'DISMISS_NOTICE' });
+      break;
   }
 }
 
-// World map: one strip per world (matches the Savoria world-select design),
-// with level nodes joined by a dotted path.
-function buildMapScreen() {
-  const list = $('map-worlds');
-  list.innerHTML = '';
-  RELEASED_WORLDS.forEach((w) => {
-    const worldLevels = RELEASED_LEVELS.map((L, i) => ({ L, i })).filter(({ L }) => L.world === w.n);
-    const anyOpen = worldLevels.some(({ i }) => i < save.unlocked);
-    const strip = document.createElement('div');
-    strip.className = 'world-strip' + (anyOpen ? '' : ' locked');
-    strip.style.backgroundImage = `url('${w.thumb}')`;
-    const stars = worldLevels.reduce((n, { L }) => n + (save.best[L.id] || 0), 0);
+app.addEventListener('click', (event) => {
+  const target = event.target.closest('[data-action]');
+  if (!target || !app.contains(target)) return;
+  handleAction(target.dataset.action, target, event);
+});
 
-    const badge = document.createElement('div');
-    badge.className = 'world-badge';
-    badge.innerHTML = `<span class="wnum">${w.n}</span>
-      <span class="wname">${w.name}<small>${w.cuisine}</small></span>
-      <span class="wstars">${anyOpen ? '⭐' + stars + '/' + worldLevels.length * 3 : '🔒'}</span>`;
-    strip.appendChild(badge);
+const movementCodes = new Set([
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'KeyA',
+  'KeyD',
+  'ShiftLeft',
+  'ShiftRight',
+  'Space',
+]);
 
-    const nodes = document.createElement('div');
-    nodes.className = 'level-nodes';
-    worldLevels.forEach(({ L, i }) => {
-      const open = i < save.unlocked;
-      const node = document.createElement('button');
-      node.className = 'level-node' + (open ? '' : ' locked') + (i === save.unlocked - 1 ? ' current' : '');
-      const st = save.best[L.id] || 0;
-      node.innerHTML = open
-        ? `<span class="nid">${L.world}-${L.idx}</span><span class="nstars">${st ? '⭐'.repeat(st) : '·'}</span>`
-        : '🔒';
-      node.title = open ? `${L.world}-${L.idx} ${L.name}` : 'Locked';
-      if (open) node.onclick = () => { sfx.coin(); startLevel(i); };
-      nodes.appendChild(node);
-    });
-    strip.appendChild(nodes);
-    list.appendChild(strip);
-  });
-  $('map-lives').textContent = lives;
+addEventListener('keydown', (event) => {
+  if (uiState.screen === 'playing' && movementCodes.has(event.code)) {
+    dispatch({ type: 'MOVEMENT_USED' });
+  }
+});
+
+addEventListener('blur', () => {
+  if (dispatch({ type: 'PAUSE' })) session?.pause();
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && dispatch({ type: 'PAUSE' })) session?.pause();
+});
+
+addEventListener('beforeunload', cancelLevel);
+
+function showScreenForTest(id) {
+  if (id === 'title-screen') dispatch({ type: 'RETURN_TITLE' });
+  if (id === 'char-screen') dispatch({ type: 'START' });
+  if (id === 'map-screen') {
+    dispatch({ type: 'CHOOSE_CHARACTER', characterId: uiState.save.chef });
+  }
 }
 
-// ── wire buttons ──
-$('btn-play').onclick = () => { sfx.ensure(); sfx.coin(); buildCharScreen(); showScreen('char-screen'); };
-$('btn-back-char').onclick = () => showScreen('char-screen');
-$('btn-resume').onclick = resumeGame;
-$('btn-restart').onclick = () => { $('pause-overlay').classList.add('hidden'); startLevel(currentLevel); };
-$('btn-quit').onclick = () => {
-  levelStartId++;
-  session?.destroy();
-  session = null;
-  buildMapScreen();
-  showScreen('map-screen');
-};
-$('btn-next').onclick = () => {
-  const isBoss = $('complete-overlay').dataset.isboss === '1';
-  session?.destroy(); session = null;
-  if (isBoss) { showScreen('win-screen'); return; }
-  if (currentLevel + 1 < RELEASED_LEVELS.length) startLevel(currentLevel + 1);
-  else { buildMapScreen(); showScreen('map-screen'); }
-};
-$('btn-replay').onclick = () => startLevel(currentLevel);
-$('btn-go-retry').onclick = () => { lives = 4; startLevel(currentLevel); };
-$('btn-go-menu').onclick = () => { lives = 4; buildMapScreen(); showScreen('map-screen'); };
-$('btn-win-menu').onclick = () => { buildMapScreen(); showScreen('map-screen'); };
-
-// testing hooks
 window.__savoriaTest = {
   startLevel,
-  showScreen,
+  dispatch,
+  showScreen: showScreenForTest,
   releasedLevels: RELEASED_LEVELS,
+  get state() { return uiState; },
   get session() { return session; },
+  simulateAssetFailure(asset = 'tile_top.png') {
+    dispatch({ type: 'LOAD_FAILED', asset });
+  },
+  simulateWebGLFailure() {
+    dispatch({ type: 'WEBGL_FAILED' });
+  },
+  simulateCompletion(stars = 2) {
+    dispatch({
+      type: 'COURSE_COMPLETE',
+      levelId: uiState.selectedLevelId ?? '1-1',
+      stars,
+      stats: { coins: 8, totalCoins: 10, time: 42 },
+    });
+  },
 };
 
-showScreen('title-screen');
+renderUi(uiState);
+if (uiState.notice) {
+  setTimeout(() => dispatch({ type: 'DISMISS_NOTICE' }), 6000);
+}

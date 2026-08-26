@@ -18,75 +18,97 @@
   </div>
 
   <div id="app">
-    <div id="title-screen" class="screen">
+    <div id="game-stage" class="hidden" data-ui-state="playing" data-primary tabindex="-1" aria-label="Savoria course"></div>
+
+    <div id="title-screen" class="screen" data-ui-state="title">
       <div class="logo-stage title-logo-stage"><img class="logo" src="assets/sprites/savoria_logo.png" alt="Savoria"></div>
       <div class="subtitle">A 3D Adventure</div>
-      <button class="btn" id="btn-play">Start Adventure</button>
+      <button class="btn" id="btn-play" data-action="start" data-primary>Start Adventure</button>
       <div class="subtitle local-note">100% local · no internet needed</div>
     </div>
 
-    <div id="char-screen" class="screen hidden">
-      <h2 class="screen-title">Choose Your Chef</h2>
+    <div id="char-screen" class="screen hidden" data-ui-state="characters">
+      <h1 class="screen-title">Choose your chef</h1>
       <div class="card-row" id="char-cards"></div>
     </div>
 
-    <div id="map-screen" class="screen hidden">
+    <div id="map-screen" class="screen hidden" data-ui-state="world">
       <div class="map-head">
-        <h2 class="screen-title">Select World</h2>
+        <div>
+          <div class="map-kicker">World 1</div>
+          <h1 class="screen-title">Pasta Plains</h1>
+        </div>
         <div class="map-meta">👨‍🍳 ×<span id="map-lives">4</span></div>
       </div>
       <div id="map-worlds"></div>
-      <button class="btn small" id="btn-back-char">← Change Chef</button>
+      <button class="btn small" id="btn-back-char" data-action="back-to-characters">← Change chef</button>
     </div>
 
     <div id="hurt-flash"></div>
     <div id="hud" class="hidden">
-      <div id="hud-level-panel">
-        <div id="hlp-world">PASTA PLAINS</div>
-        <div id="hlp-sub"><span id="hlp-num">1-1</span><span id="hlp-name">Farfalle Fields</span></div>
-        <div id="hlp-stars">☆☆☆</div>
+      <div id="hud-top">
+        <div id="hud-level-panel" aria-label="Current course">
+          <div id="hlp-world">PASTA PLAINS</div>
+          <div id="hlp-sub"><span id="hlp-num">1-1</span><span id="hlp-name">Farfalle Fields</span></div>
+          <div id="hlp-stars" aria-label="No course stars">☆☆☆</div>
+        </div>
+        <div class="hud-chip" id="hud-status" aria-label="Health and tomatoes">
+          <div id="hud-hearts" aria-label="3 hearts">❤️❤️❤️</div>
+          <div class="hud-divider" aria-hidden="true"></div>
+          <div id="hud-tomatoes"><img src="assets/sprites/tomato.png" alt=""> <span id="tomato-count">0</span></div>
+        </div>
+        <div class="hud-chip" id="hud-timer" aria-label="Course timer">🕐 <span id="timer-text">0:00</span></div>
       </div>
-      <div class="hud-chip" id="hud-lives"><img id="hud-chef" src="assets/sprites/fatsio.png" alt="">×<span id="life-count">3</span></div>
-      <div class="hud-chip" id="hud-tomatoes"><img src="assets/sprites/tomato.png" alt=""> <span id="tomato-count">0</span></div>
-      <div class="hud-chip" id="hud-hearts"></div>
-      <div class="hud-chip" id="hud-timer">🕐 <span id="timer-text">0:00</span></div>
       <div class="hud-chip" id="hud-power"><img id="power-icon" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt=""><span id="power-time"></span></div>
       <div id="hud-boss"><span class="label">Don Funghi</span><div class="bar"><div class="fill" id="boss-fill"></div></div></div>
-      <div id="hud-msg"></div>
+      <div id="hud-msg" role="status" aria-live="polite" aria-atomic="true"></div>
       <div id="help">← → or A/D move · Shift run · Space or ↑ jump · Esc pause</div>
     </div>
 
-    <div id="pause-overlay" class="overlay hidden">
-      <div class="panel">
-        <h2>Paused</h2>
-        <button class="btn" id="btn-resume">Resume</button>
-        <button class="btn small" id="btn-restart">Restart Level</button>
-        <button class="btn small" id="btn-quit">Level Select</button>
+    <div id="loading-screen" class="screen loading-screen hidden" data-ui-state="loading" tabindex="-1" data-primary aria-labelledby="loading-title">
+      <div class="panel loading-panel">
+        <div class="panel-kicker">Preparing the kitchen</div>
+        <h1 id="loading-title">Loading World 1</h1>
+        <div id="loading-percent">0%</div>
+        <progress id="loading-progress" max="100" value="0" aria-label="World 1 loading progress">0%</progress>
       </div>
     </div>
 
-    <div id="complete-overlay" class="overlay hidden">
+    <div id="pause-overlay" class="overlay hidden" data-ui-state="paused" role="dialog" aria-modal="true" aria-labelledby="pause-title">
       <div class="panel">
-        <h2 id="complete-title">Course Clear!</h2>
+        <div class="panel-kicker">Kitchen break</div>
+        <h1 id="pause-title">Paused</h1>
+        <button class="btn" id="btn-resume" data-action="resume" data-primary>Resume</button>
+        <button class="btn small" id="btn-restart" data-action="replay">Restart course</button>
+        <button class="btn small" id="btn-quit" data-action="quit-to-world">World 1 map</button>
+      </div>
+    </div>
+
+    <div id="complete-overlay" class="overlay hidden" data-ui-state="complete" role="dialog" aria-modal="true" aria-labelledby="complete-title">
+      <div class="panel">
+        <div class="panel-kicker">Order up</div>
+        <h1 id="complete-title">Course clear!</h1>
         <div class="stars" id="complete-stars"></div>
         <div class="stats" id="complete-stats"></div>
-        <button class="btn" id="btn-next">Continue</button>
-        <button class="btn small" id="btn-replay">Replay</button>
+        <button class="btn" id="btn-next" data-action="continue" data-primary>World 1 map</button>
+        <button class="btn small" id="btn-replay" data-action="replay">Replay course</button>
       </div>
     </div>
 
-    <div id="gameover-screen" class="screen hidden">
-      <h2 class="screen-title">Out of Chefs!</h2>
-      <div class="subtitle">The kitchen closes… for now.</div>
-      <button class="btn" id="btn-go-retry">Try Again</button>
-      <button class="btn small" id="btn-go-menu">Main Menu</button>
+    <div id="error-screen" class="screen error-screen hidden" data-ui-state="error" tabindex="-1" aria-labelledby="error-title">
+      <div class="panel error-panel">
+        <div class="panel-kicker">Kitchen check</div>
+        <h1 id="error-title">One ingredient did not load</h1>
+        <p id="error-copy">Check the game files, then retry this course.</p>
+        <code id="error-asset" class="hidden"></code>
+        <button class="btn" id="btn-retry-load" data-action="retry" data-primary>Retry</button>
+        <a class="text-link" id="error-link" href="./" data-primary>Back to Savoria</a>
+      </div>
     </div>
 
-    <div id="win-screen" class="screen hidden">
-      <div class="logo-stage win-logo-stage"><img class="logo win-logo" src="assets/sprites/savoria_logo.png" alt="Savoria"></div>
-      <h2 class="screen-title">Don Funghi is Defeated!</h2>
-      <div class="subtitle">Savoria's flavor is safe. Buon appetito! 🍝</div>
-      <button class="btn" id="btn-win-menu">Main Menu</button>
+    <div id="save-recovery" class="save-recovery hidden" role="status" aria-live="polite" aria-atomic="true">
+      <span id="save-recovery-copy"></span>
+      <button type="button" data-action="dismiss-notice" aria-label="Dismiss save recovery notice">×</button>
     </div>
   </div>
   <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
