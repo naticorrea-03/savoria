@@ -1,6 +1,7 @@
 export const SAVE_KEY = 'savoria3d-save-v3';
 const LEGACY_KEY = 'savoria3d-save-v2';
 const MAX_RELEASED_LEVELS = 2;
+const RELEASED_LEVEL_IDS = new Set(['1-1', '1-2']);
 
 export const createFreshSave = () => ({ version: 3, unlocked: 1, best: {}, chef: 'fatsio', sound: true });
 
@@ -30,9 +31,13 @@ export function writeSave(storage, save) {
 }
 
 export function recordCompletion(save, levelId, stars, nextUnlocked) {
+  if (!RELEASED_LEVEL_IDS.has(levelId) || !Number.isInteger(stars)) {
+    return { ...save, best: { ...save.best } };
+  }
+  const validStars = Math.min(3, Math.max(0, stars));
   return {
     ...save,
     unlocked: Math.min(MAX_RELEASED_LEVELS, Math.max(save.unlocked, nextUnlocked)),
-    best: { ...save.best, [levelId]: Math.max(save.best[levelId] ?? 0, stars) },
+    best: { ...save.best, [levelId]: Math.max(save.best[levelId] ?? 0, validStars) },
   };
 }

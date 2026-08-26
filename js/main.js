@@ -15,6 +15,7 @@ const CHARS = [
 // ── save data ──
 const loaded = loadSave(localStorage);
 let save = loaded.save;
+let saveRepairPending = loaded.recovered;
 
 // ── run state ──
 let game = null;
@@ -49,7 +50,15 @@ function hudMsg(text, ms = 2200) {
   clearTimeout(msgTimer);
   msgTimer = setTimeout(() => { el.style.opacity = 0; }, ms);
 }
-if (loaded.recovered) hudMsg('Save repaired');
+
+function showInitialHudMessage(levelName) {
+  if (saveRepairPending) {
+    saveRepairPending = false;
+    hudMsg('Save repaired', 2600);
+    return;
+  }
+  hudMsg(levelName, 2600);
+}
 
 const POWER_ICONS = {
   speed: 'assets/sprites/speed_pasta.png',
@@ -120,7 +129,7 @@ function startLevel(idx) {
   $('hud-chef').src = currentChar.img;
   $('hud-power').style.display = 'none';
   $('hud-boss').style.display = 'none';
-  hudMsg(level.name, 2600);
+  showInitialHudMessage(level.name);
   game.start();
 }
 
