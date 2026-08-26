@@ -1,43 +1,75 @@
 import { expect, test } from '@playwright/test';
 
-function monitorPage(page) {
+const LOCAL_ORIGIN = 'http://127.0.0.1:8977';
+
+async function monitorPage(page) {
   const diagnostics = {
     console: [],
     pageErrors: [],
     externalRequests: [],
+    httpFailures: [],
+    requestFailures: [],
+    webSockets: [],
   };
 
-  page.on('console', (message) => {
-    // Chromium emits this GPU-process diagnostic while WebGL reads pixels.
-    // It is not emitted by page code, so retain strict checks for every other
-    // application warning and error.
-    const chromiumGpuDiagnostic = message.text().includes('GPU stall due to ReadPixels');
-    if (
-      ['warning', 'error'].includes(message.type())
-      && !chromiumGpuDiagnostic
-    ) {
-      diagnostics.console.push(message.text());
+  await page.addInitScript(() => {
+    const calls = [];
+    const toText = (value) => {
+      if (typeof value === 'string') return value;
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    };
+    for (const type of ['warn', 'error']) {
+      const original = console[type];
+      console[type] = (...args) => {
+        calls.push({ type, text: args.map(toText).join(' ') });
+        return original.apply(console, args);
+      };
     }
+    Object.defineProperty(window, '__savoriaPageConsoleCalls', { value: calls });
   });
+
   page.on('pageerror', (error) => diagnostics.pageErrors.push(error.message));
   page.on('request', (request) => {
     const url = new URL(request.url());
-    if (url.protocol.startsWith('http') && url.hostname !== '127.0.0.1') {
+    if (url.protocol.startsWith('http') && url.origin !== LOCAL_ORIGIN) {
       diagnostics.externalRequests.push(request.url());
     }
   });
+  page.on('response', (response) => {
+    const url = new URL(response.url());
+    if (url.origin === LOCAL_ORIGIN && response.status() >= 400) {
+      diagnostics.httpFailures.push(`${response.status()} ${response.url()}`);
+    }
+  });
+  page.on('requestfailed', (request) => {
+    diagnostics.requestFailures.push(`${request.failure()?.errorText ?? 'failed'} ${request.url()}`);
+  });
+  page.on('websocket', (webSocket) => diagnostics.webSockets.push(webSocket.url()));
 
   return diagnostics;
 }
 
-function expectClean(diagnostics) {
+async function expectClean(page, diagnostics) {
+  diagnostics.console = await page.evaluate(() => window.__savoriaPageConsoleCalls ?? []);
   expect(diagnostics.console).toEqual([]);
   expect(diagnostics.pageErrors).toEqual([]);
   expect(diagnostics.externalRequests).toEqual([]);
+  expect(diagnostics.httpFailures).toEqual([]);
+  expect(diagnostics.requestFailures).toEqual([]);
+  expect(diagnostics.webSockets).toEqual([]);
+}
+
+async function waitForTitle(page) {
+  await expect(page.locator('#app')).toHaveAttribute('data-screen', 'title');
 }
 
 async function openWorldOne(page) {
   await page.goto('/play/');
+  await waitForTitle(page);
   await page.getByRole('button', { name: 'Start Adventure' }).click();
   await page.getByRole('button', { name: /^Fatsio/ }).click();
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'world');
@@ -51,12 +83,13 @@ async function startOneOne(page) {
 }
 
 test('landing reaches chef selection and shows only the World 1 release', async ({ page }) => {
-  const diagnostics = monitorPage(page);
+  const diagnostics = await monitorPage(page);
 
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /run the pasta course/i })).toBeVisible();
   await page.getByRole('link', { name: 'Play Savoria' }).click();
   await expect(page).toHaveURL(/\/play\/$/);
+  await waitForTitle(page);
   await page.getByRole('button', { name: 'Start Adventure' }).click();
   await expect(page.getByRole('heading', { name: 'Choose your chef' })).toBeVisible();
   await expect(page.locator('#char-cards button')).toHaveCount(3);
@@ -70,25 +103,29 @@ test('landing reaches chef selection and shows only the World 1 release', async 
   await expect(page.getByRole('button', { name: /1-2 Penne Ridge, locked/ })).toBeDisabled();
 
   await page.reload();
+  await waitForTitle(page);
   await page.getByRole('button', { name: 'Start Adventure' }).click();
   await expect(page.getByRole('button', { name: /^Dinnerette/ })).toHaveAttribute('aria-pressed', 'true');
-  expectClean(diagnostics);
+  await expectClean(page, diagnostics);
 });
 
 test('1-1 pauses, resumes with Space, and replaces its canvas on restart', async ({ page }) => {
-  const diagnostics = monitorPage(page);
+  const diagnostics = await monitorPage(page);
 
   await startOneOne(page);
-  await expect.poll(() => page.evaluate(() => window.__savoriaTest.session?.running)).toBe(true);
+  const timerBeforePause = await page.locator('#timer-text').textContent();
 
   await page.keyboard.press('Escape');
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'paused');
   await expect(page.getByRole('dialog', { name: 'Paused' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Resume' })).toBeFocused();
   await expect(page.locator('#game-stage canvas')).toHaveCount(1);
 
   await page.keyboard.press('Space');
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'playing');
-  await expect.poll(() => page.evaluate(() => window.__savoriaTest.session?.running)).toBe(true);
+  await expect(page.locator('#game-stage')).toBeFocused();
+  await expect(page.locator('#game-stage canvas')).toBeVisible();
+  await expect.poll(async () => page.locator('#timer-text').textContent()).not.toBe(timerBeforePause);
 
   const firstCanvas = await page.locator('#game-stage canvas').elementHandle();
   expect(firstCanvas).not.toBeNull();
@@ -97,11 +134,11 @@ test('1-1 pauses, resumes with Space, and replaces its canvas on restart', async
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'playing');
   await expect(page.locator('#game-stage canvas')).toHaveCount(1);
   expect(await firstCanvas.evaluate((canvas) => canvas.isConnected)).toBe(false);
-  expectClean(diagnostics);
+  await expectClean(page, diagnostics);
 });
 
 test('completion unlocks 1-2 and keeps that progress after reload', async ({ page }) => {
-  const diagnostics = monitorPage(page);
+  const diagnostics = await monitorPage(page);
 
   await startOneOne(page);
   await page.evaluate(() => {
@@ -116,19 +153,30 @@ test('completion unlocks 1-2 and keeps that progress after reload', async ({ pag
   await expect(page.getByRole('button', { name: /1-2 Penne Ridge/ })).toBeEnabled();
 
   await page.reload();
+  await waitForTitle(page);
   await page.getByRole('button', { name: 'Start Adventure' }).click();
   await page.getByRole('button', { name: /^Fatsio/ }).click();
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'world');
   await expect(page.getByRole('button', { name: /1-2 Penne Ridge/ })).toBeEnabled();
-  expectClean(diagnostics);
+  await expectClean(page, diagnostics);
 });
 
 test('390 by 844 shows only the desktop blocker', async ({ page }) => {
-  const diagnostics = monitorPage(page);
+  const diagnostics = await monitorPage(page);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/play/');
   await expect(page.getByRole('heading', { name: 'Bring a bigger screen.' })).toBeVisible();
   await expect(page.locator('#app')).toBeHidden();
-  expectClean(diagnostics);
+  await expectClean(page, diagnostics);
+});
+
+test('diagnostics fail a page warning that resembles a Chromium GPU notice', async ({ page }) => {
+  const diagnostics = await monitorPage(page);
+
+  await page.goto('/play/');
+  await waitForTitle(page);
+  await page.evaluate(() => console.warn('GPU stall due to ReadPixels from page code'));
+
+  await expect(expectClean(page, diagnostics)).rejects.toThrow('GPU stall due to ReadPixels from page code');
 });
