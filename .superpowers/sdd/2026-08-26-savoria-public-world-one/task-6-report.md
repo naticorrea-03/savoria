@@ -229,7 +229,7 @@ No blocking implementation concerns remain.
 - Respawn now calls `InputState.clearTransient()`. It clears buffered jump intent while retaining physically held A, D, arrow, and Shift keys.
 - Pause, resume, blur, and destruction still call `InputState.clear()`, which releases every held key and clears jump state.
 - Checkpoint activation mutates the existing material color. It no longer allocates an unowned replacement material.
-- The fixed simulation again calls `updateBoss()` before `updateEntities()`, matching the base runtime order.
+- Fix round 1 moved `updateBoss()` ahead of the bundled entity update. A scoped rereview found that this was not exact base parity because the bundle contained both pre-boss and post-boss work. Fix round 2 below resolves the exact order.
 
 ### Additional automated coverage
 
@@ -288,10 +288,47 @@ Temporary player positioning and keyboard-event dispatch were used inside this l
 - Confirmed the pure motion regression fails without the branch.
 - Confirmed full input clearing remains unchanged outside respawn.
 - Confirmed checkpoint activation does not transfer or abandon material ownership.
-- Confirmed boss processing precedes entity and particle processing.
+- Confirmed the reviewer-requested boss-first call at that stage. A later exact base comparison invalidated that conclusion and led to fix round 2.
 - Confirmed the browser restart and quit path destroys the prior canvas.
 - Confirmed no dependency was installed and no external request was added.
 
 ### Fix-round concerns
 
 No new blocking concern was found. Browser setup used the existing real Chrome control surface because local Playwright remains intentionally uninstalled until Task 9.
+
+## Fix Round 2
+
+### Exact runtime ordering
+
+Base commit `f3a627d` runs these gameplay phases in order:
+
+1. Coins, items, enemies, and projectiles.
+2. Boss behavior.
+3. Particles and decorative spins.
+
+`updateEntities()` now accepts one `betweenPhases` callback. It runs the pre-boss entity and projectile work, invokes the callback, then runs particles and decor. `GameSession` supplies `updateBoss()` as that callback. Entity and boss modules remain independent from the DOM, and particle/projectile ownership remains in the entity module.
+
+### Ordering regression evidence
+
+The focused assertion was added before the phased callback.
+
+RED command:
+
+```sh
+node --test tests/unit/entities.test.js
+```
+
+Result: 0 passed and 1 failed because the boss-phase observation was never invoked.
+
+After the implementation, the test was mutation-checked against both incorrect placements:
+
+- Callback before all entity work failed with projectile life `2` instead of `1.75`.
+- Callback after particles failed with particle life `0.75` instead of `1`.
+
+Restoring the callback between projectiles and particles produced 1 passed and 0 failed.
+
+The final `npm run test:unit` run produced 32 passed and 0 failed. Syntax checks for the changed runtime and test files exited 0, and `git diff --check` reported no errors.
+
+### Browser scope
+
+No hidden-boss browser run was performed. Both released World 1 levels compile with `boss: null`, so no released browser path can exercise boss ordering. The deterministic unit test directly observes state at the phase boundary and was proven to fail for both wrong orders.

@@ -267,8 +267,7 @@ export class GameSession {
     this.updateDoors(dt);
     if (this.updateCheckpointAndGoal(dt)) return;
 
-    updateBoss(this, dt);
-    updateEntities(this, dt);
+    updateEntities(this, dt, () => updateBoss(this, dt));
     player.invuln = this.invuln;
     animateChefRig(this.rig, player, this.elapsed, dt, BASE_ANIMATION_SPEED);
     this.updateShadow();

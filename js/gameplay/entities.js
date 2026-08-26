@@ -233,10 +233,11 @@ function updateParticles(context, dt) {
   for (const spinner of context.decoSpins) spinner.rotation.z += dt * 0.8;
 }
 
-export function updateEntities(context, dt) {
+export function updateEntities(context, dt, betweenPhases) {
   updateCoins(context, dt);
   updateItems(context, dt);
   updateEnemies(context, dt);
   updateProjectiles(context, dt);
+  betweenPhases();
   updateParticles(context, dt);
 }
