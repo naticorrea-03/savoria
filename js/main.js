@@ -1,6 +1,8 @@
 // Savoria 3D — UI state machine: menus, world map, HUD, lives, progression.
-import { Game, sfx } from './game.js?v=2';
+import * as THREE from 'three';
+import { Game, sfx, WORLD_ONE_ASSETS } from './game.js?v=2';
 import { LEVELS, WORLDS, buildLevel } from './levels.js?v=2';
+import { createTextureStore } from './core/texture-store.js';
 import { loadSave, writeSave, recordCompletion } from './ui/save-store.js';
 
 const $ = (id) => document.getElementById(id);
@@ -22,6 +24,7 @@ let game = null;
 let currentChar = CHARS.find((char) => char.id === save.chef) ?? CHARS[0];
 let currentLevel = 0;   // index into LEVELS
 let lives = 4;
+let levelStartId = 0;
 
 // ── screens ──
 const screens = ['title-screen', 'char-screen', 'map-screen', 'gameover-screen', 'win-screen'];
@@ -49,6 +52,10 @@ function hudMsg(text, ms = 2200) {
   el.style.opacity = 1;
   clearTimeout(msgTimer);
   msgTimer = setTimeout(() => { el.style.opacity = 0; }, ms);
+}
+
+function showLoadProgress(progress) {
+  hudMsg(`Loading ${Math.round(progress * 100)}%`, 500);
 }
 
 function showInitialHudMessage(levelName) {
@@ -104,11 +111,30 @@ function onGameEvent(type, data) {
 }
 
 // ── game lifecycle ──
-function startLevel(idx) {
+async function startLevel(idx) {
+  const startId = ++levelStartId;
+  const textures = createTextureStore({
+    THREE,
+    loader: new THREE.TextureLoader(),
+    baseUrl: document.baseURI,
+  });
+  try {
+    await textures.preload(WORLD_ONE_ASSETS, (loaded, total) => showLoadProgress(loaded / total));
+  } catch (error) {
+    textures.dispose();
+    if (startId === levelStartId) hudMsg('Could not load level');
+    console.error('Could not preload game textures', error);
+    return;
+  }
+  if (startId !== levelStartId) {
+    textures.dispose();
+    return;
+  }
   if (game) { game.destroy(); game = null; }
   currentLevel = idx;
   const level = buildLevel(LEVELS[idx]);
   game = new Game(app, level, {
+    textures,
     charId: currentChar.id,
     hearts: 3,
     onEvent: onGameEvent,

@@ -1,17 +1,6 @@
 // Savoria 3D — side-scrolling engine: 3D-rendered world, gameplay on the x/y plane.
 import * as THREE from 'three';
 
-const texCache = new Map();
-const loader = new THREE.TextureLoader();
-function tex(path) {
-  if (!texCache.has(path)) {
-    const t = loader.load(path);
-    t.colorSpace = THREE.SRGBColorSpace;
-    texCache.set(path, t);
-  }
-  return texCache.get(path);
-}
-
 // ── Tiny synth SFX (fully local, WebAudio) ─────────────────────────────
 class Sfx {
   constructor() { this.ctx = null; }
@@ -50,8 +39,8 @@ function skyTexture(top, bottom) {
   return t;
 }
 
-function makeSprite(path, w, h) {
-  const m = new THREE.SpriteMaterial({ map: tex(path), transparent: true, alphaTest: 0.1 });
+function makeSprite(textures, path, w, h) {
+  const m = new THREE.SpriteMaterial({ map: textures.texture(path), transparent: true, alphaTest: 0.1 });
   const s = new THREE.Sprite(m);
   s.scale.set(w, h, 1);
   return s;
@@ -77,29 +66,6 @@ class AABB {
 
 const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 
-// tiled clone of a painted texture; clones made before the image loads are
-// re-marked for upload once it arrives (otherwise they render black)
-const pendingClones = {};
-function tiledTex(path, rx, ry, ox = 0, oy = 0) {
-  const key = path + '|base';
-  if (!texCache.has(key)) {
-    const t = loader.load(path, () => {
-      for (const c of pendingClones[path] || []) c.needsUpdate = true;
-      pendingClones[path] = [];
-    });
-    t.colorSpace = THREE.SRGBColorSpace;
-    texCache.set(key, t);
-  }
-  const base = texCache.get(key);
-  const t = base.clone();
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(Math.max(0.5, rx), Math.max(0.5, ry));
-  t.offset.set(ox % 1, oy % 1);
-  if (base.image) t.needsUpdate = true;
-  else (pendingClones[path] ||= []).push(t);
-  return t;
-}
-
 const TILES = {
   top: 'assets/sprites/tile_top.png',
   fill: 'assets/sprites/tile_fill.png',
@@ -113,9 +79,9 @@ const PROPS = ['assets/sprites/bush.png', 'assets/sprites/grass_tuft.png',
 
 // six-face material set for painted terrain boxes: lasagna sides, basil-lasagna top.
 // World-aligned offsets keep the pattern continuous across adjacent boxes.
-function groundMats(x, y, z, w, h, d, tint) {
-  const side = (rw, o) => new THREE.MeshLambertMaterial({ color: tint, map: tiledTex(TILES.fill, rw / 4, h / 4, o / 4, y / 4) });
-  const top = new THREE.MeshLambertMaterial({ color: tint, map: tiledTex(TILES.top, w / 4, d / 4, (x - w / 2) / 4, (z - d / 2) / 4) });
+function groundMats(textures, x, y, z, w, h, d, tint) {
+  const side = (rw, o) => new THREE.MeshLambertMaterial({ color: tint, map: textures.tiled(TILES.fill, rw / 4, h / 4, o / 4, y / 4) });
+  const top = new THREE.MeshLambertMaterial({ color: tint, map: textures.tiled(TILES.top, w / 4, d / 4, (x - w / 2) / 4, (z - d / 2) / 4) });
   const bottom = mat(0x554433);
   return [side(d, z - d / 2), side(d, z - d / 2), top, bottom, side(w, x - w / 2), side(w, x - w / 2)];
 }
@@ -436,10 +402,19 @@ const SPRITES = {
   boost: 'assets/sprites/basil_boost.png',
 };
 
+export const WORLD_ONE_ASSETS = [...new Set([
+  ...Object.values(TILES),
+  ...PROPS,
+  ...Object.values(SPRITES),
+  'assets/sprites/goal_archway.png',
+  'assets/sprites/start_signpost.png',
+])];
+
 export class Game {
   constructor(container, level, opts) {
     this.level = level;
     this.opts = opts;           // { charSprite, hearts, onEvent(type, data) }
+    this.textures = opts.textures;
     this.ev = opts.onEvent;
     this.running = false;
     this.finished = false;
@@ -555,14 +530,14 @@ export class Game {
       const [x, y, z, w, h, d, ck] = b;
       let material;
       if (ck === 'ground' || ck === 'ground2') {
-        material = groundMats(x, y, z, w, h, d, ck === 'ground' ? tint : tint2);
+        material = groundMats(this.textures, x, y, z, w, h, d, ck === 'ground' ? tint : tint2);
       } else if (ck === 'brick') {
         // cheese blocks: golden, hole-pocked (holes added in dress())
-        material = new THREE.MeshLambertMaterial({ color: 0xf2cc5a, map: tiledTex(TILES.plat, w / 3.4, h / 3.4) });
+        material = new THREE.MeshLambertMaterial({ color: 0xf2cc5a, map: this.textures.tiled(TILES.plat, w / 3.4, h / 3.4) });
       } else if (ck === 'pillar') {
-        material = new THREE.MeshLambertMaterial({ color: tint, map: tiledTex(TILES.pillar, 1, h / 3.5) });
+        material = new THREE.MeshLambertMaterial({ color: tint, map: this.textures.tiled(TILES.pillar, 1, h / 3.5) });
       } else if (ck === 'plat') {
-        material = new THREE.MeshLambertMaterial({ color: tint, map: tiledTex(TILES.plat, w / 3.4, d / 3.4) });
+        material = new THREE.MeshLambertMaterial({ color: tint, map: this.textures.tiled(TILES.plat, w / 3.4, d / 3.4) });
       } else {
         material = matFor(ck);
       }
@@ -577,7 +552,7 @@ export class Game {
         const n = w > 14 ? 2 : 1;
         for (let i = 0; i < n; i++) {
           propSeed++;
-          const p = makeSprite(PROPS[propSeed % PROPS.length], 1.5, 1.5);
+          const p = makeSprite(this.textures, PROPS[propSeed % PROPS.length], 1.5, 1.5);
           p.material.color.set(tint);
           p.position.set(x - w / 2 + 2 + ((propSeed * 5.3) % (w - 4)), y + h / 2 + 0.7, 2.6);
           this.scene.add(p);
@@ -608,7 +583,7 @@ export class Game {
     for (const m of L.movers || []) {
       const [x, y, z, w, h, d] = m.box;
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
-        new THREE.MeshLambertMaterial({ color: tint, map: tiledTex(TILES.plat, 1, 1), emissive: 0x221100 }));
+        new THREE.MeshLambertMaterial({ color: tint, map: this.textures.tiled(TILES.plat, 1, 1), emissive: 0x221100 }));
       mesh.castShadow = mesh.receiveShadow = true;
       dress(mesh, w, h, d, 'plat');
       this.scene.add(mesh);
@@ -621,7 +596,7 @@ export class Game {
     this.hazards = [];
     for (const hz of L.hazards || []) {
       const [x, y, z, w, d] = hz;
-      const rt = tiledTex(TILES.river, w / 6, d / 6);
+      const rt = this.textures.tiled(TILES.river, w / 6, d / 6);
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.6, d),
         new THREE.MeshStandardMaterial({ map: rt, color: th.hazardTint ?? 0xffffff, emissive: th.hazardEmissive, emissiveIntensity: 0.4, roughness: 0.35 }));
       mesh.position.set(x, y, z);
@@ -630,14 +605,14 @@ export class Game {
     }
 
     for (const c of L.coins || []) {
-      const s = makeSprite(SPRITES.tomato, 0.9, 0.9);
+      const s = makeSprite(this.textures, SPRITES.tomato, 0.9, 0.9);
       s.position.set(c[0], c[1] + 0.5, c[2]);
       this.scene.add(s);
       this.coins.push({ sprite: s, base: c[1] + 0.5, taken: false });
     }
 
     for (const it of L.items || []) {
-      const s = makeSprite(SPRITES[it.t], 1.1, 1.1);
+      const s = makeSprite(this.textures, SPRITES[it.t], 1.1, 1.1);
       s.position.set(it.p[0], it.p[1] + 0.8, it.p[2]);
       const bubble = new THREE.Mesh(new THREE.SphereGeometry(0.85, 14, 10),
         new THREE.MeshBasicMaterial({ color: 0xfff2cc, transparent: true, opacity: 0.22 }));
@@ -649,7 +624,7 @@ export class Game {
     for (const e of L.enemies || []) this.spawnEnemy(e);
 
     if (L.boss) {
-      const s = makeSprite(SPRITES.boss, 5.2, 5.2);
+      const s = makeSprite(this.textures, SPRITES.boss, 5.2, 5.2);
       s.position.set(L.boss.p[0], L.boss.p[1], L.boss.p[2]);
       this.scene.add(s);
       const ring = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.12, 8, 24),
@@ -677,7 +652,7 @@ export class Game {
     if (L.goal) {
       // her painted GOAL archway, with the golden fork spinning behind it
       this.goalObj = new THREE.Group();
-      const arch = makeSprite('assets/sprites/goal_archway.png', 6.4, 6.4);
+      const arch = makeSprite(this.textures, 'assets/sprites/goal_archway.png', 6.4, 6.4);
       arch.position.y = 3.1;
       this.goalObj.add(arch);
       const fork = buildGoalFork();
@@ -689,7 +664,7 @@ export class Game {
       this.scene.add(this.goalObj);
     }
     // start signpost
-    const sign = makeSprite('assets/sprites/start_signpost.png', 2.4, 2.4);
+    const sign = makeSprite(this.textures, 'assets/sprites/start_signpost.png', 2.4, 2.4);
     sign.position.set(L.spawn[0] + 2.5, L.spawn[1] - 2.8, 1.5);
     this.scene.add(sign);
 
@@ -767,7 +742,7 @@ export class Game {
 
   spawnEnemy(e) {
     const size = e.t === 'meatball' ? 1.5 : e.t === 'flyer' ? 1.4 : 1.7;
-    const s = makeSprite(SPRITES[e.t], size, size);
+    const s = makeSprite(this.textures, SPRITES[e.t], size, size);
     s.position.set(e.p[0], e.p[1] + size * 0.35, e.p[2]);
     this.scene.add(s);
     this.enemies.push({
@@ -1288,6 +1263,7 @@ export class Game {
     removeEventListener('keyup', this._ku);
     removeEventListener('blur', this._blur);
     document.removeEventListener('visibilitychange', this._blur);
+    this.textures.dispose();
     this.renderer.dispose();
     this.renderer.forceContextLoss();   // free the GPU context now; browsers cap live contexts and kill old ones, which caused mounting stutter across restarts
     this.renderer.domElement.remove();
