@@ -1,10 +1,16 @@
-// Savoria 3D — UI state machine: menus, world map, HUD, lives, progression.
-import * as THREE from 'three';
-import { Game, sfx, WORLD_ONE_ASSETS } from './game.js?v=2';
-import { LEVELS, WORLDS, buildLevel } from './levels.js?v=2';
-import { createTextureStore } from './core/texture-store.js';
-import { createActiveProgressReporter } from './ui/level-loading.js';
-import { loadSave, writeSave, recordCompletion } from './ui/save-store.js';
+// Savoria 3D UI state machine: menus, world map, HUD, lives, progression.
+import * as THREE from '../../vendor/three.module.js';
+import { sfx } from '../audio/sfx.js';
+import { GameSession } from '../core/game-session.js';
+import { createTextureStore } from '../core/texture-store.js';
+import { WORLD_ONE_ASSETS } from '../core/world-builder.js';
+import {
+  RELEASED_LEVELS,
+  RELEASED_WORLDS,
+  buildReleasedLevel,
+} from '../levels/index.js';
+import { createActiveProgressReporter } from './level-loading.js';
+import { loadSave, writeSave, recordCompletion } from './save-store.js';
 
 const $ = (id) => document.getElementById(id);
 const app = $('app');
@@ -21,15 +27,15 @@ let save = loaded.save;
 let saveRepairPending = loaded.recovered;
 
 // ── run state ──
-let game = null;
+let session = null;
 let currentChar = CHARS.find((char) => char.id === save.chef) ?? CHARS[0];
-let currentLevel = 0;   // index into LEVELS
+let currentLevel = 0;   // index into RELEASED_LEVELS
 let lives = 4;
 let levelStartId = 0;
 
 // ── screens ──
 const screens = ['title-screen', 'char-screen', 'map-screen', 'gameover-screen', 'win-screen'];
-function show(id) {
+function showScreen(id) {
   screens.forEach((s) => $(s).classList.toggle('hidden', s !== id));
   $('hud').classList.add('hidden');
   $('pause-overlay').classList.add('hidden');
@@ -111,7 +117,7 @@ function onGameEvent(type, data) {
   }
 }
 
-// ── game lifecycle ──
+// ── session lifecycle ──
 async function startLevel(idx) {
   const startId = ++levelStartId;
   const textures = createTextureStore({
@@ -134,23 +140,24 @@ async function startLevel(idx) {
     textures.dispose();
     return;
   }
-  if (game) { game.destroy(); game = null; }
+  if (session) { session.destroy(); session = null; }
   currentLevel = idx;
-  const level = buildLevel(LEVELS[idx]);
-  game = new Game(app, level, {
+  const level = buildReleasedLevel(RELEASED_LEVELS[idx]);
+  session = new GameSession({
+    container: app,
+    level,
+    characterId: currentChar.id,
     textures,
-    charId: currentChar.id,
-    hearts: 3,
-    onEvent: onGameEvent,
+    emit: onGameEvent,
   });
-  show(null);
+  showScreen(null);
   $('hud').classList.remove('hidden');
   renderHearts(3);
   $('tomato-count').textContent = '0';
   $('life-count').textContent = lives;
   $('timer-text').textContent = fmtTime(level.time);
-  const def = LEVELS[idx];
-  const wdef = WORLDS.find((w) => w.n === def.world);
+  const def = RELEASED_LEVELS[idx];
+  const wdef = RELEASED_WORLDS.find((w) => w.n === def.world);
   $('hlp-world').textContent = wdef.name.toUpperCase();
   $('hlp-num').textContent = `${def.world}-${def.idx}`;
   $('hlp-name').textContent = def.name.replace(/^\d+-\d+\s*/, '');
@@ -160,25 +167,25 @@ async function startLevel(idx) {
   $('hud-power').style.display = 'none';
   $('hud-boss').style.display = 'none';
   showInitialHudMessage(level.name);
-  game.start();
+  session.start();
 }
 
 function pauseGame() {
-  if (!game || game.finished) return;
-  game.pause();
+  if (!session || session.finished) return;
+  session.pause();
   $('pause-overlay').classList.remove('hidden');
 }
 function resumeGame() {
   $('pause-overlay').classList.add('hidden');
   if (document.activeElement?.blur) document.activeElement.blur();
-  game?.resume();
+  session?.resume();
 }
 
 function onDied() {
   lives--;
   $('life-count').textContent = lives;
   if (lives <= 0) {
-    setTimeout(() => { game?.destroy(); game = null; show('gameover-screen'); }, 900);
+    setTimeout(() => { session?.destroy(); session = null; showScreen('gameover-screen'); }, 900);
   } else {
     hudMsg('Ouch! Chefs left: ' + lives, 2000);
     setTimeout(() => startLevel(currentLevel), 1100);
@@ -188,7 +195,7 @@ function onDied() {
 function onComplete(stats) {
   const coinPct = stats.totalCoins ? stats.coins / stats.totalCoins : 1;
   const stars = 1 + (coinPct >= 0.6 ? 1 : 0) + (stats.hearts >= 2 ? 1 : 0);
-  const id = LEVELS[currentLevel].id;
+  const id = RELEASED_LEVELS[currentLevel].id;
   save = recordCompletion(save, id, stars, currentLevel + 2);
   writeSave(localStorage, save);
 
@@ -196,7 +203,7 @@ function onComplete(stats) {
   $('complete-stars').textContent = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
   $('complete-stats').innerHTML =
     `🍅 ${stats.coins} / ${stats.totalCoins} tomatoes<br>⏱ ${fmtTime(stats.time)}`;
-  $('btn-next').textContent = stats.isBoss ? 'Finish' : (currentLevel + 1 < LEVELS.length ? 'Next Level →' : 'World Map');
+  $('btn-next').textContent = stats.isBoss ? 'Finish' : (currentLevel + 1 < RELEASED_LEVELS.length ? 'Next Level →' : 'World Map');
   $('complete-overlay').classList.remove('hidden');
   $('complete-overlay').dataset.isboss = stats.isBoss ? '1' : '';
 }
@@ -215,7 +222,7 @@ function buildCharScreen() {
       writeSave(localStorage, save);
       sfx.coin();
       buildMapScreen();
-      show('map-screen');
+      showScreen('map-screen');
     };
     row.appendChild(card);
   }
@@ -226,8 +233,8 @@ function buildCharScreen() {
 function buildMapScreen() {
   const list = $('map-worlds');
   list.innerHTML = '';
-  WORLDS.forEach((w) => {
-    const worldLevels = LEVELS.map((L, i) => ({ L, i })).filter(({ L }) => L.world === w.n);
+  RELEASED_WORLDS.forEach((w) => {
+    const worldLevels = RELEASED_LEVELS.map((L, i) => ({ L, i })).filter(({ L }) => L.world === w.n);
     const anyOpen = worldLevels.some(({ i }) => i < save.unlocked);
     const strip = document.createElement('div');
     strip.className = 'world-strip' + (anyOpen ? '' : ' locked');
@@ -262,24 +269,35 @@ function buildMapScreen() {
 }
 
 // ── wire buttons ──
-$('btn-play').onclick = () => { sfx.ensure(); sfx.coin(); buildCharScreen(); show('char-screen'); };
-$('btn-back-char').onclick = () => show('char-screen');
+$('btn-play').onclick = () => { sfx.ensure(); sfx.coin(); buildCharScreen(); showScreen('char-screen'); };
+$('btn-back-char').onclick = () => showScreen('char-screen');
 $('btn-resume').onclick = resumeGame;
 $('btn-restart').onclick = () => { $('pause-overlay').classList.add('hidden'); startLevel(currentLevel); };
-$('btn-quit').onclick = () => { game?.destroy(); game = null; buildMapScreen(); show('map-screen'); };
+$('btn-quit').onclick = () => {
+  levelStartId++;
+  session?.destroy();
+  session = null;
+  buildMapScreen();
+  showScreen('map-screen');
+};
 $('btn-next').onclick = () => {
   const isBoss = $('complete-overlay').dataset.isboss === '1';
-  game?.destroy(); game = null;
-  if (isBoss) { show('win-screen'); return; }
-  if (currentLevel + 1 < LEVELS.length) startLevel(currentLevel + 1);
-  else { buildMapScreen(); show('map-screen'); }
+  session?.destroy(); session = null;
+  if (isBoss) { showScreen('win-screen'); return; }
+  if (currentLevel + 1 < RELEASED_LEVELS.length) startLevel(currentLevel + 1);
+  else { buildMapScreen(); showScreen('map-screen'); }
 };
 $('btn-replay').onclick = () => startLevel(currentLevel);
 $('btn-go-retry').onclick = () => { lives = 4; startLevel(currentLevel); };
-$('btn-go-menu').onclick = () => { lives = 4; buildMapScreen(); show('map-screen'); };
-$('btn-win-menu').onclick = () => { buildMapScreen(); show('map-screen'); };
+$('btn-go-menu').onclick = () => { lives = 4; buildMapScreen(); showScreen('map-screen'); };
+$('btn-win-menu').onclick = () => { buildMapScreen(); showScreen('map-screen'); };
 
 // testing hooks
-window.__ui = { startLevel, show, LEVELS, buildMapScreen, get game() { return game; }, setChar: (i) => { currentChar = CHARS[i]; } };
+window.__savoriaTest = {
+  startLevel,
+  showScreen,
+  releasedLevels: RELEASED_LEVELS,
+  get session() { return session; },
+};
 
-show('title-screen');
+showScreen('title-screen');
