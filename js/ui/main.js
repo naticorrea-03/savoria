@@ -3,7 +3,7 @@ import { sfx } from '../audio/sfx.js';
 import { GameSession } from '../core/game-session.js';
 import { chefSpriteConfig } from '../core/chef-sprite.js';
 import { createTextureStore } from '../core/texture-store.js';
-import { WORLD_ONE_ASSETS } from '../core/world-builder.js';
+import { collectVisualAssets } from '../visuals/manifest-utils.js';
 import {
   RELEASED_LEVELS,
   RELEASED_WORLDS,
@@ -150,6 +150,8 @@ async function startLevel(index) {
     return;
   }
 
+  const level = buildReleasedLevel(definition);
+
   const textures = createTextureStore({
     THREE,
     loader: new THREE.TextureLoader(),
@@ -158,7 +160,10 @@ async function startLevel(index) {
 
   try {
     await textures.preload(
-      [...WORLD_ONE_ASSETS, chefSpriteConfig(uiState.save.chef).path],
+      [
+        ...collectVisualAssets(level.theme.visuals),
+        chefSpriteConfig(uiState.save.chef).path,
+      ],
       createActiveProgressReporter(
         startId,
         () => levelStartId,
@@ -178,7 +183,6 @@ async function startLevel(index) {
     return;
   }
 
-  const level = buildReleasedLevel(definition);
   let nextSession;
   try {
     nextSession = new GameSession({

@@ -82,11 +82,11 @@ async function startOneOne(page) {
   await expect(page.locator('#game-stage canvas')).toHaveCount(1);
 }
 
-test('landing reaches chef selection and shows only the World 1 release', async ({ page }) => {
+test('landing reaches chef selection and shows both released worlds', async ({ page }) => {
   const diagnostics = await monitorPage(page);
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /run the pasta course/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /run the food course/i })).toBeVisible();
   await page.getByRole('link', { name: 'Play Savoria' }).click();
   await expect(page).toHaveURL(/\/play\/$/);
   await waitForTitle(page);
@@ -97,11 +97,13 @@ test('landing reaches chef selection and shows only the World 1 release', async 
 
   await page.getByRole('button', { name: /^Dinnerette/ }).click();
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'world');
-  await expect(page.locator('.world-strip')).toHaveCount(1);
+  await expect(page.locator('.world-strip')).toHaveCount(2);
   await expect(page.getByRole('region', { name: 'World 1, Pasta Plains' })).toBeVisible();
-  await expect(page.locator('[data-action="select-level"]')).toHaveCount(2);
+  await expect(page.getByRole('region', { name: 'World 2, Sushi Shores' })).toBeVisible();
+  await expect(page.locator('[data-action="select-level"]')).toHaveCount(4);
   await expect(page.getByRole('button', { name: /1-1 Farfalle Fields/ })).toBeEnabled();
   await expect(page.getByRole('button', { name: /1-2 Penne Ridge, locked/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /2-1 Nori Narrows, locked/ })).toBeDisabled();
 
   await page.reload();
   await waitForTitle(page);
@@ -226,7 +228,7 @@ test('1-1 hides off-surface shadows and renders seamless sauce with cliff trim',
     };
     let cliffEdges = 0;
     session.scene.traverse((object) => {
-      if (object.name === 'world-one-cliff-edge') cliffEdges += 1;
+      if (object.name === 'pasta-plains-cliff-edge') cliffEdges += 1;
     });
 
     return {
@@ -256,7 +258,7 @@ test('production progression unlocks, completes, and resumes 1-2', async ({ page
     session.player.vel.set(0, 0, 0);
   });
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'complete');
-  await page.getByRole('button', { name: 'World 1 map' }).click();
+  await page.getByRole('button', { name: 'World map' }).click();
   await expect(page.getByRole('button', { name: /1-2 Penne Ridge/ })).toBeEnabled();
 
   await page.reload();
@@ -294,7 +296,7 @@ test('production progression unlocks, completes, and resumes 1-2', async ({ page
   });
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'complete');
   await expect(page.getByRole('heading', { name: 'World 1 complete!' })).toBeVisible();
-  await page.getByRole('button', { name: 'World 1 map' }).click();
+  await page.getByRole('button', { name: 'World map' }).click();
 
   await page.reload();
   await waitForTitle(page);
@@ -302,6 +304,86 @@ test('production progression unlocks, completes, and resumes 1-2', async ({ page
   await page.getByRole('button', { name: /^Fatsio/ }).click();
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'world');
   await expect(page.getByRole('button', { name: /1-2 Penne Ridge, 2 of 3 stars/ })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /2-1 Nori Narrows/ })).toBeEnabled();
+  await expectClean(page, diagnostics);
+});
+
+test('Sushi Shores loads themed art, unlocks 2-2, completes, and resumes', async ({ page }) => {
+  const diagnostics = await monitorPage(page);
+
+  await page.goto('/play/');
+  await page.evaluate(() => {
+    localStorage.setItem('savoria3d-save-v4', JSON.stringify({
+      version: 4,
+      unlocked: 3,
+      best: { '1-1': 3, '1-2': 3 },
+      chef: 'dinnerette',
+      sound: false,
+    }));
+  });
+  await page.reload();
+  await waitForTitle(page);
+  await page.getByRole('button', { name: 'Play' }).click();
+  await page.getByRole('button', { name: /^Dinnerette/ }).click();
+  await page.evaluate(() => performance.clearResourceTimings());
+
+  await page.getByRole('button', { name: /2-1 Nori Narrows/ }).click();
+  await expect(page.locator('#app')).toHaveAttribute('data-screen', 'playing');
+  await expect(page.locator('#hlp-world')).toHaveText('SUSHI SHORES');
+  await expect(page.locator('#hlp-num')).toHaveText('2-1');
+  const themedFrame = await page.evaluate(() => {
+    const session = window.__savoriaTest.session;
+    const paths = performance.getEntriesByType('resource')
+      .map((entry) => new URL(entry.name).pathname);
+    return {
+      paths,
+      enemyPath: session.level.theme.visuals.sprites.meatball,
+      hazardPath: session.level.theme.visuals.hazard.surface,
+      doorPath: session.level.theme.visuals.sprites.door,
+    };
+  });
+  expect(themedFrame.paths).toContain('/assets/world2/background-far.png');
+  expect(themedFrame.paths).toContain('/assets/world2/rice-nori-ground.png');
+  expect(themedFrame.paths).toContain('/assets/world2/wasabi-imp.png');
+  expect(themedFrame.paths).toContain('/assets/world2/golden-sushi-lantern.png');
+  expect(themedFrame.paths).toContain('/assets/world2/bonus-sushi-portal.png');
+  expect(themedFrame.paths).not.toContain('/assets/world1/lasagna-cliff-edge.png');
+  expect(themedFrame.enemyPath).toBe('assets/world2/wasabi-imp.png');
+  expect(themedFrame.hazardPath).toBe('assets/world2/soy-sauce-surface.png');
+  expect(themedFrame.doorPath).toBe('assets/world2/bonus-sushi-portal.png');
+
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#app')).toHaveAttribute('data-screen', 'paused');
+  await page.keyboard.press('Space');
+  await expect(page.locator('#app')).toHaveAttribute('data-screen', 'playing');
+  await page.evaluate(() => {
+    const session = window.__savoriaTest.session;
+    session.player.pos.copy(session.goalObject.position);
+    session.player.vel.set(0, 0, 0);
+  });
+  await expect(page.locator('#app')).toHaveAttribute('data-screen', 'complete');
+  await page.getByRole('button', { name: 'World map' }).click();
+  await expect(page.getByRole('button', { name: /2-2 Wasabi Falls/ })).toBeEnabled();
+
+  await page.reload();
+  await waitForTitle(page);
+  await page.getByRole('button', { name: 'Play' }).click();
+  await page.getByRole('button', { name: /^Dinnerette/ }).click();
+  await page.getByRole('button', { name: /2-2 Wasabi Falls/ }).click();
+  await expect(page.locator('#hlp-num')).toHaveText('2-2');
+  await page.evaluate(() => {
+    const session = window.__savoriaTest.session;
+    session.player.pos.copy(session.goalObject.position);
+    session.player.vel.set(0, 0, 0);
+  });
+  await expect(page.getByRole('heading', { name: 'World 2 complete!' })).toBeVisible();
+  await page.getByRole('button', { name: 'World map' }).click();
+
+  await page.reload();
+  await waitForTitle(page);
+  await page.getByRole('button', { name: 'Play' }).click();
+  await page.getByRole('button', { name: /^Dinnerette/ }).click();
+  await expect(page.getByRole('button', { name: /2-2 Wasabi Falls, 2 of 3 stars/ })).toBeEnabled();
   await expectClean(page, diagnostics);
 });
 

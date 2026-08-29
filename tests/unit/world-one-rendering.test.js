@@ -51,14 +51,15 @@ test('ground art preserves its source scale on narrow collision blocks', () => {
   assert.equal(Number(narrow.repeatX.toFixed(3)), 0.455);
 });
 
-test('adjacent level boxes share one continuous ground visual', () => {
+test('adjacent level boxes share a visual only when their terrain kind matches', () => {
   const runs = mergeGroundVisualRuns([
     [5, 0, 0, 10, 6, 8, 'ground'],
     [12, 0, 0, 4, 6, 8, 'ground2'],
     [20, 0, 0, 4, 6, 8, 'ground'],
   ]);
   assert.deepEqual(runs, [
-    [7, 0, 0, 14, 6, 8, 'ground'],
+    [5, 0, 0, 10, 6, 8, 'ground'],
+    [12, 0, 0, 4, 6, 8, 'ground2'],
     [20, 0, 0, 4, 6, 8, 'ground'],
   ]);
 });

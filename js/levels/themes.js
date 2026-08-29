@@ -1,4 +1,5 @@
 import { WORLD_ONE_VISUALS } from '../visuals/world-one-manifest.js';
+import { WORLD_TWO_VISUALS } from '../visuals/world-two-manifest.js';
 
 export const THEMES = {
   pasta: {
@@ -11,6 +12,7 @@ export const THEMES = {
     hills: [0xd9b060, 0xc9a050], deco: [], skyline: [],
   },
   sushi: {
+    visuals: WORLD_TWO_VISUALS,
     tint: 0xdcecd0, hazardTint: 0xd8b860, melt: 0x9ac858,
     bg: 'assets/sprites/bg2.jpg',
     skyTop: 0x8fd0f0, skyBottom: 0xffd9e8, fog: 0xf5dce8, fogFar: 150,

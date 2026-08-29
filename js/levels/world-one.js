@@ -6,6 +6,7 @@ export const WORLD_ONE = {
   cuisine: 'Italian Cuisine',
   theme: 'pasta',
   thumb: 'assets/sprites/world1_thumb.png',
+  mapBackground: 'assets/world1/world-map-background.png',
 };
 
 export const WORLD_ONE_LEVELS = [

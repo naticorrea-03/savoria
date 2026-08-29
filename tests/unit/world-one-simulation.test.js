@@ -18,7 +18,7 @@ const TUTORIAL_COPY = [
   'Stomp from above',
 ];
 
-test('every World 1 required jump has a half-unit landing margin', () => {
+test('every released required jump has a half-unit landing margin', () => {
   const capabilities = measureJumpCapabilities(DEFAULT_MOTION);
   for (const definition of RELEASED_LEVELS) {
     const level = buildReleasedLevel(definition);
@@ -29,14 +29,17 @@ test('every World 1 required jump has a half-unit landing margin', () => {
   }
 });
 
-test('compiled transfers cover every mandatory World 1 jump boundary', () => {
+test('compiled transfers cover every mandatory released jump boundary', () => {
   for (const definition of RELEASED_LEVELS) {
     const level = buildReleasedLevel(definition);
     for (const [sourceIndex, [kind, size, opts = {}]] of definition.segs.entries()) {
       let expected = 0;
-      if (kind === 'gap') expected = opts.mover ? 2 : 1;
+      if (kind === 'gap') expected = opts.mover || opts.plat ? 2 : 1;
       if (kind === 'steps') expected = size;
       if (kind === 'river') expected = Math.max(1, Math.round(size / 5)) + 1;
+      if (kind === 'plats') {
+        expected = size + (definition.segs[sourceIndex + 1]?.[0] === 'pillars' ? 0 : 1);
+      }
       if (kind === 'pillars') expected = size + 1;
       if (expected === 0) continue;
       assert.equal(
@@ -128,7 +131,7 @@ test('mover full-cycle envelope rejects unsafe range and invalid period', () => 
 });
 
 test('World 1 teaches walking jumps before run-assisted jumps', () => {
-  for (const definition of RELEASED_LEVELS) {
+  for (const definition of RELEASED_LEVELS.filter(({ world }) => world === 1)) {
     const level = buildReleasedLevel(definition);
     const walkingJumps = level.requiredJumps.filter((jump) => !jump.requiresRun);
     const runningJumps = level.requiredJumps.filter((jump) => jump.requiresRun);
@@ -142,7 +145,7 @@ test('World 1 teaches walking jumps before run-assisted jumps', () => {
 });
 
 test('each course teaches movement before its first enemy', () => {
-  for (const definition of RELEASED_LEVELS) {
+  for (const definition of RELEASED_LEVELS.filter(({ world }) => world === 1)) {
     const level = buildReleasedLevel(definition);
     const firstEnemyX = Math.min(...level.enemies.map((enemy) => enemy.p[0]));
     for (const tutorialId of ['move', 'jump']) {
@@ -196,7 +199,7 @@ test('Penne Ridge checkpoint precedes its longest combined sequence', () => {
 });
 
 test('each course has one exact prompt for every relevant World 1 control', () => {
-  for (const definition of RELEASED_LEVELS) {
+  for (const definition of RELEASED_LEVELS.filter(({ world }) => world === 1)) {
     const level = buildReleasedLevel(definition);
     assert.deepEqual(
       level.tutorials.map((tutorial) => tutorial.text).sort(),
@@ -242,7 +245,7 @@ function crossTutorialsSequentially(session) {
 }
 
 test('jump prompts emit on safe ground before takeoff', () => {
-  for (const definition of RELEASED_LEVELS) {
+  for (const definition of RELEASED_LEVELS.filter(({ world }) => world === 1)) {
     const level = buildReleasedLevel(definition);
     const session = createTutorialSession(level);
     const jump = level.tutorials.find((tutorial) => tutorial.id === 'jump');

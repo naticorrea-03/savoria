@@ -1,6 +1,6 @@
 # Savoria
 
-Savoria is a desktop food platformer. Choose a chef, cross Pasta Plains, collect tomatoes, and clear two hand-built courses.
+Savoria is a desktop food platformer. Choose a chef, cross Pasta Plains and Sushi Shores, collect tomatoes, and clear four hand-built courses.
 
 ## Play
 
@@ -22,7 +22,7 @@ Savoria began as a Godot project. That work shaped the game art and direction. I
 
 A level is data. `js/levels/validate.js` checks the recipe, `js/levels/compiler.js` turns it into neutral game data, and the runtime renders it.
 
-World 1 definitions live in [`js/levels/world-one.js`](./js/levels/world-one.js). This is the current compact definition for released course 1-1:
+Released definitions live in [`js/levels/world-one.js`](./js/levels/world-one.js) and [`js/levels/world-two.js`](./js/levels/world-two.js). This is the current compact definition for released course 1-1:
 
 ```js
 level(1, 1, 'Farfalle Fields', 'pasta', 240, [
@@ -39,7 +39,7 @@ level(1, 1, 'Farfalle Fields', 'pasta', 240, [
 ]);
 ```
 
-The starter contribution flow revises one existing released course, 1-1 or 1-2. A new released course needs a proposal and explicit release-test updates. The current test suite does not accept a drop-in `1-3` course.
+The starter contribution flow revises one existing World 1 course, 1-1 or 1-2. A new released course needs a proposal and explicit release-test updates. The current suite does not accept a drop-in course.
 
 Supported primitives are `run`, `gap`, `rise`, `steps`, `river`, `plats`, `roll`, `blocks`, `tier`, `pillars`, `bonus`, `checkpoint`, `goal`, and `boss`.
 
@@ -53,13 +53,13 @@ npm test
 npm run test:browser
 ```
 
-`npm test` includes validator, compiler, and World 1 reachability coverage. `npm run test:browser` starts `python3 serve.py` when no local server is already running.
+`npm test` includes validator, compiler, save, rendering, and released-course reachability coverage. `npm run test:browser` starts `python3 serve.py` when no local server is already running.
 
 ## Architecture
 
 - `index.html` is the landing page.
 - `play/index.html` is the game shell.
-- `js/levels/` contains the level DSL, validation, compiler, themes, and released World 1 data.
+- `js/levels/` contains the level DSL, validation, compiler, themes, and released World 1 and World 2 data.
 - `js/core/`, `js/gameplay/`, and `js/ui/` own rendering, game rules, and screens.
 - `tests/unit/` covers game logic and level reachability. `tests/browser/` covers the desktop flow.
 
@@ -69,9 +69,12 @@ Start with [the contribution guide](./CONTRIBUTING.md). It includes a copyable C
 
 ## Project status
 
-Released game content is World 1, Pasta Plains: **1-1 Farfalle Fields** and **1-2 Penne Ridge**. The release registry contains only those levels.
+Released game content includes two complete worlds:
 
-Worlds 2 through 6 live in `js/experimental/`. They are hidden experimental data. They are not part of the released game, public map, or progression.
+- World 1, Pasta Plains: **1-1 Farfalle Fields** and **1-2 Penne Ridge**
+- World 2, Sushi Shores: **2-1 Nori Narrows** and **2-2 Wasabi Falls**
+
+Worlds 3 through 6 live in `js/experimental/`. They are hidden experimental data. They are not part of the released game, public map, or progression.
 
 This repository does not claim a hosted build, public repository, remote CI run, or Pages deployment.
 

@@ -613,7 +613,7 @@ h1.screen-title {
   }
 }
 
-/* World 1 visual system */
+/* Savoria visual system */
 #title-screen {
   background:
     linear-gradient(180deg, rgb(58 28 15 / 12%), transparent 28%, transparent 68%, rgb(58 28 15 / 34%)),
@@ -810,10 +810,7 @@ h1.screen-title {
 }
 
 #map-screen {
-  background:
-    linear-gradient(rgb(58 28 15 / 8%), rgb(58 28 15 / 8%)),
-    url('../assets/world1/world-map-background.png') center / cover no-repeat,
-    var(--espresso);
+  background: var(--espresso);
   gap: 0;
   padding: 0;
 }
@@ -846,6 +843,8 @@ h1.screen-title {
 }
 
 #map-worlds {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   height: 100%;
   width: 100%;
 }
@@ -861,6 +860,10 @@ h1.screen-title {
   width: 100%;
 }
 
+.world-strip + .world-strip {
+  border-left: 4px solid rgb(255 245 214 / 72%);
+}
+
 .world-strip::after {
   background: linear-gradient(180deg, rgb(58 28 15 / 56%), transparent 23%, transparent 74%, rgb(58 28 15 / 58%));
   content: '';
@@ -871,16 +874,19 @@ h1.screen-title {
 
 .world-badge {
   bottom: 22px;
-  left: 50%;
+  left: 24px;
   min-width: 0;
   position: absolute;
-  transform: translateX(-50%);
+  transform: none;
   z-index: 2;
 }
 
-.world-badge .wnum,
+.world-badge .wnum {
+  display: flex;
+}
+
 .world-badge .wname {
-  display: none;
+  display: block;
 }
 
 .world-badge .wstars {

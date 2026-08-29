@@ -24,6 +24,18 @@ export const CHARACTERS = [
 
 const RELEASED_IDS = new Set(RELEASED_LEVELS.map(({ id }) => id));
 
+function completionState(levelId) {
+  const index = RELEASED_LEVELS.findIndex(({ id }) => id === levelId);
+  const level = RELEASED_LEVELS[index];
+  if (!level) return null;
+  const nextLevel = RELEASED_LEVELS[index + 1];
+  return {
+    nextUnlocked: Math.min(RELEASED_LEVELS.length, index + 2),
+    worldComplete: !nextLevel || nextLevel.world !== level.world,
+    worldNumber: level.world,
+  };
+}
+
 export function createWebGLCapabilityProbe(createCanvas) {
   let cached;
   return () => {
@@ -167,16 +179,22 @@ export function reduceUiState(state, event) {
       return state.screen === 'paused' ? { ...state, screen: 'playing' } : state;
     case 'COURSE_COMPLETE': {
       if (!RELEASED_IDS.has(event.levelId)) return state;
-      const nextUnlocked = event.levelId === '1-1' ? 2 : state.save.unlocked;
+      const completion = completionState(event.levelId);
       return {
         ...state,
         screen: 'complete',
-        save: recordCompletion(state.save, event.levelId, event.stars, nextUnlocked),
+        save: recordCompletion(
+          state.save,
+          event.levelId,
+          event.stars,
+          completion.nextUnlocked,
+        ),
         completion: {
           levelId: event.levelId,
           stars: Math.min(3, Math.max(0, event.stars)),
           stats: event.stats ?? {},
-          worldComplete: event.levelId === '1-2',
+          worldComplete: completion.worldComplete,
+          worldNumber: completion.worldNumber,
         },
       };
     }
@@ -291,7 +309,7 @@ function renderWorld(doc, state) {
     );
     const strip = doc.createElement('section');
     strip.className = 'world-strip';
-    strip.style.backgroundImage = "url('assets/world1/world-map-background.png')";
+    strip.style.backgroundImage = `url('${world.mapBackground ?? world.thumb}')`;
     strip.setAttribute('aria-label', `World ${world.n}, ${world.name}`);
 
     const badge = doc.createElement('div');
@@ -329,7 +347,7 @@ function renderCompletion(doc, completion) {
   const stats = doc.getElementById('complete-stats');
   if (title) {
     title.textContent = completion.worldComplete
-      ? 'World 1 complete!'
+      ? `World ${completion.worldNumber} complete!`
       : `${level?.name ?? 'Course'} clear!`;
   }
   if (stars) {
@@ -360,7 +378,7 @@ function renderError(doc, error) {
   asset.textContent = '';
   asset.classList.add('hidden');
   retry.classList.toggle('hidden', !error?.retryable);
-  link.textContent = error?.gameOver ? 'World 1 map' : 'Back to Savoria';
+  link.textContent = error?.gameOver ? 'World map' : 'Back to Savoria';
   link.href = error?.gameOver ? 'play/' : './';
   link.dataset.action = error?.gameOver ? 'quit-to-world' : '';
 
@@ -421,6 +439,22 @@ export function renderUi(state, { doc = document, previousScreen = lastRenderedS
   renderWorld(doc, state);
   renderCompletion(doc, state.completion);
   renderError(doc, state.error);
+
+  const selectedLevel = RELEASED_LEVELS[state.selectedLevelIndex];
+  const selectedWorld = RELEASED_WORLDS.find(({ n }) => n === selectedLevel?.world);
+  const loadingTitle = doc.getElementById('loading-title');
+  const loadingProgress = doc.getElementById('loading-progress');
+  const mapButtons = [doc.getElementById('btn-quit'), doc.getElementById('btn-next')];
+  if (loadingTitle) loadingTitle.textContent = `Loading ${selectedWorld?.name ?? 'Savoria'}`;
+  if (loadingProgress) {
+    loadingProgress.setAttribute(
+      'aria-label',
+      `${selectedWorld?.name ?? 'Savoria'} loading progress`,
+    );
+  }
+  for (const button of mapButtons) {
+    if (button) button.textContent = 'World map';
+  }
 
   const gameStage = doc.getElementById('game-stage');
   const hud = doc.getElementById('hud');
