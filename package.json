@@ -1,0 +1,13 @@
+{
+  "name": "savoria",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:unit": "node --test tests/unit/*.test.js",
+    "test:browser": "playwright test",
+    "test": "npm run test:unit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1"
+  }
+}

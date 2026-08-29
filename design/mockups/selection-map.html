@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Savoria approval mockup: character selection and map</title>
+  <link rel="stylesheet" href="mockups.css">
+</head>
+<body>
+  <main class="mockup-screen flow-mockup">
+    <section class="flow-panel character-panel" aria-label="Character selection mockup">
+      <p class="panel-step utility-label">Choose your chef</p>
+      <h1>Who is cooking?</h1>
+      <p class="shared-moves">Every chef shares the same moves. Pick your favorite.</p>
+      <div class="chef-grid">
+        <article class="chef-card selected">
+          <span class="selected-badge">SELECTED</span>
+          <img src="../../assets/sprites/fatsio.png" alt="Fatsio">
+          <h2>Fatsio</h2>
+          <p>Big heart, bigger appetite.</p>
+        </article>
+        <article class="chef-card">
+          <img src="../../assets/sprites/dinnerette.png" alt="Dinnerette">
+          <h2>Dinnerette</h2>
+          <p>Royalty with a whisk.</p>
+        </article>
+        <article class="chef-card">
+          <img src="../../assets/sprites/chefno.png" alt="Chefno">
+          <h2>Chefno</h2>
+          <p>Small chef, huge flavor.</p>
+        </article>
+      </div>
+      <button class="ui-button" type="button">Choose Fatsio</button>
+    </section>
+
+    <section class="flow-panel map-panel" aria-label="World 1 map mockup">
+      <div class="map-heading">
+        <div class="utility-label">World 1</div>
+        <h1>Pasta Plains</h1>
+      </div>
+      <div class="map-lives">👨‍🍳 ×4</div>
+      <div class="map-node open">
+        <strong>1-1</strong>
+        <small>☆☆☆</small>
+        <span class="map-node-label">Farfalle Fields</span>
+      </div>
+      <div class="map-node locked">
+        <strong>🔒</strong>
+        <small>Finish 1-1</small>
+        <span class="map-node-label">Penne Ridge</span>
+      </div>
+      <button class="ui-button secondary map-back" type="button">Change chef</button>
+    </section>
+  </main>
+</body>
+</html>

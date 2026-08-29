@@ -1,0 +1,65 @@
+:root {
+  --espresso: #1a0f08;
+  --espresso-soft: #382014;
+  --parmesan: #ffe9b0;
+  --pasta-gold: #f2b544;
+  --marinara: #c54b22;
+  --tomato: #d8341c;
+  --basil: #2e5a1e;
+  --cream: #fff7df;
+  --display: "Cooper Black", "Rockwell Extra Bold", Georgia, serif;
+  --body: "Avenir Next", "Trebuchet MS", sans-serif;
+  --utility: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --page-pad: clamp(1.25rem, 4vw, 4.5rem);
+  --content: 76rem;
+  --focus: 3px solid var(--cream);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--espresso);
+  color: var(--parmesan);
+  font-family: var(--body);
+}
+
+button,
+a {
+  font: inherit;
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: var(--focus);
+  outline-offset: 5px;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
