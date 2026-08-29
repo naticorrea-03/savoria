@@ -184,6 +184,24 @@ function createWorldTools(THREE) {
       );
       mesh.add(cap);
     }
+
+    if (visual.edge && !isPlatform) {
+      const edgeHeight = h + (visual.skirtDepth || 0);
+      const edgeY = -(visual.skirtDepth || 0) / 2;
+      for (const side of [-1, 1]) {
+        const edge = new THREE.Mesh(
+          new THREE.PlaneGeometry(visual.edgeWidth, edgeHeight),
+          visualMaterial(textures, visual.edge),
+        );
+        edge.name = 'world-one-cliff-edge';
+        edge.position.set(
+          side * visualWidth / 2,
+          edgeY,
+          terrainPlaneZ(d, visual.faceDepth + 0.03),
+        );
+        mesh.add(edge);
+      }
+    }
   }
 
   // ── Decoration builders (one per world flavor) ─────────────────────────
@@ -440,11 +458,13 @@ function buildWorld(state, tools) {
   state.hazards = [];
   for (const hz of L.hazards || []) {
     const [x, y, z, w, d] = hz;
-    const rt = visualTexture(
-      state.textures,
+    const rt = state.textures.cropped(
       WORLD_ONE_VISUALS.hazard.surface,
       WORLD_ONE_VISUALS.hazard.uv,
-      WORLD_ONE_VISUALS.hazard.removeLightNeutral,
+      {
+        removeLightNeutral: WORLD_ONE_VISUALS.hazard.removeLightNeutral,
+        seamlessHorizontal: true,
+      },
     );
     rt.wrapS = THREE.RepeatWrapping;
     const mesh = new THREE.Mesh(
@@ -516,8 +536,8 @@ function buildWorld(state, tools) {
     state.scene.add(state.goalObj);
   }
   // start signpost
-  const sign = makeSprite(state.textures, 'assets/sprites/start_signpost.png', 2.4, 2.4);
-  sign.position.set(L.spawn[0] + 2.5, L.spawn[1] - 2.8, 1.5);
+  const sign = makeSprite(state.textures, SPRITES.start, 2.2, 3.3);
+  sign.position.set(L.spawn[0] + 2.5, L.spawn[1] - 2.35, 1.5);
   state.scene.add(sign);
 
   if (!L.theme.visuals) {

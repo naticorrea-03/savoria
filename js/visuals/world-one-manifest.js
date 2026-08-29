@@ -56,6 +56,8 @@ export const WORLD_ONE_VISUALS = deepFreeze({
     ground: {
       cap: 'assets/world1/ground-cap.png',
       face: 'assets/world1/ground-face.png',
+      edge: 'assets/world1/lasagna-cliff-edge.png',
+      edgeWidth: 1.4,
       faceUv: { offsetX: 0.06, offsetY: 0.22, repeatX: 0.88, repeatY: 0.54 },
       sourceAspect: 2.9,
       skirtDepth: 6,
@@ -66,6 +68,8 @@ export const WORLD_ONE_VISUALS = deepFreeze({
     ground2: {
       cap: 'assets/world1/ground-cap.png',
       face: 'assets/world1/ground-face.png',
+      edge: 'assets/world1/lasagna-cliff-edge.png',
+      edgeWidth: 1.4,
       faceUv: { offsetX: 0.06, offsetY: 0.22, repeatX: 0.88, repeatY: 0.54 },
       sourceAspect: 2.9,
       skirtDepth: 6,
@@ -115,7 +119,7 @@ export const WORLD_ONE_VISUALS = deepFreeze({
     shield: 'assets/sprites/parmesan_shield.png',
     boost: 'assets/sprites/basil_boost.png',
     goal: 'assets/world1/golden-pasta-bell.png',
-    start: 'assets/sprites/start_signpost.png',
+    start: 'assets/world1/chef-spawn-marker.png',
   },
 });
 

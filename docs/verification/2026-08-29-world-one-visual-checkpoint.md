@@ -24,8 +24,8 @@ This document records the local `feat/savoria-world-one` implementation verified
 
 ## Automated evidence
 
-- `npm test`: 89 passed, 0 failed.
-- `npm run test:browser`: 6 passed, 0 failed.
+- `npm test`: 90 passed, 0 failed.
+- `npm run test:browser`: 7 passed, 0 failed.
 - `git diff --check`: passed.
 - Screenshot capture at all three desktop sizes: no page errors, failed requests, or document overflow.
 
@@ -42,6 +42,10 @@ This document records the local `feat/savoria-world-one` implementation verified
 - Tomatoes, enemies, players, and the marinara surface remain visually distinct.
 - The Marinara Puff replaces the legacy angry meatball sprite.
 - The Golden Pasta Bell replaces the isometric goal archway.
+- The chef spawn marker replaces the checkered racing sign.
+- Purpose-made lasagna trim closes exposed terrain edges.
+- Player shadows disappear when the chef leaves a collision surface.
+- Marinara spans the full hazard without transparent repeat seams.
 - Decorative basil plants are removed, so every visible basil is collectible.
 - The HUD stays in the corners and leaves the playfield open.
 
@@ -63,6 +67,9 @@ This document records the local `feat/savoria-world-one` implementation verified
 - `docs/verification/screenshots/world-one/fix-marinara-puff-1440x900.png`
 - `docs/verification/screenshots/world-one/fix-basil-pickup-1440x900.png`
 - `docs/verification/screenshots/world-one/fix-golden-pasta-bell-1440x900.png`
+- `docs/verification/screenshots/world-one/fix-spawn-marker-1440x900.png`
+- `docs/verification/screenshots/world-one/fix-cliff-shadow-1440x900.png`
+- `docs/verification/screenshots/world-one/fix-marinara-seam-1440x900.png`
 
 The representative screenshot uses the existing test-only session getter to move the camera to the mid-course platform and hazard section. It does not bypass the production renderer.
 

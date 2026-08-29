@@ -195,9 +195,52 @@ test('1-1 supports a double jump and collectible basil', async ({ page }) => {
   expect(result.hearts).toBe(4);
   expect(result.resourcePaths).toContain('/assets/world1/marinara-puff.png');
   expect(result.resourcePaths).toContain('/assets/world1/golden-pasta-bell.png');
+  expect(result.resourcePaths).toContain('/assets/world1/chef-spawn-marker.png');
   expect(result.resourcePaths).not.toContain('/assets/sprites/meatball_walker.png');
   expect(result.resourcePaths).not.toContain('/assets/sprites/goal_archway.png');
+  expect(result.resourcePaths).not.toContain('/assets/sprites/start_signpost.png');
   await expect(page.locator('#hud-hearts')).toHaveAttribute('aria-label', '4 hearts');
+  await expectClean(page, diagnostics);
+});
+
+test('1-1 hides off-surface shadows and renders seamless sauce with cliff trim', async ({ page }) => {
+  const diagnostics = await monitorPage(page);
+
+  await startOneOne(page);
+  const result = await page.evaluate(() => {
+    const session = window.__savoriaTest.session;
+    const gap = session.level.requiredJumps.find((jump) => jump.transfer === 'gap');
+    session.player.pos.set(gap.takeoffX + 0.1, gap.takeoffY + 2, 0);
+    session.updateShadow();
+
+    const canvas = session.hazards[0].tex.image;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    const left = context.getImageData(0, 0, 1, canvas.height).data;
+    const right = context.getImageData(canvas.width - 1, 0, 1, canvas.height).data;
+    const maxAlpha = (pixels) => {
+      let maximum = 0;
+      for (let index = 3; index < pixels.length; index += 4) {
+        maximum = Math.max(maximum, pixels[index]);
+      }
+      return maximum;
+    };
+    let cliffEdges = 0;
+    session.scene.traverse((object) => {
+      if (object.name === 'world-one-cliff-edge') cliffEdges += 1;
+    });
+
+    return {
+      shadowVisible: session.blob.visible,
+      sauceLeftAlpha: maxAlpha(left),
+      sauceRightAlpha: maxAlpha(right),
+      cliffEdges,
+    };
+  });
+
+  expect(result.shadowVisible).toBe(false);
+  expect(result.sauceLeftAlpha).toBeGreaterThan(200);
+  expect(result.sauceRightAlpha).toBeGreaterThan(200);
+  expect(result.cliffEdges).toBeGreaterThan(0);
   await expectClean(page, diagnostics);
 });
 

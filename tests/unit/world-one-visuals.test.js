@@ -43,6 +43,12 @@ test('World 1 enemy and finish marker use purpose-made Savoria assets', () => {
   assert.equal(WORLD_ONE_VISUALS.sprites.goal, 'assets/world1/golden-pasta-bell.png');
 });
 
+test('World 1 start and cliff edges use purpose-made Savoria assets', () => {
+  assert.equal(WORLD_ONE_VISUALS.sprites.start, 'assets/world1/chef-spawn-marker.png');
+  assert.equal(WORLD_ONE_VISUALS.terrain.ground.edge, 'assets/world1/lasagna-cliff-edge.png');
+  assert.equal(WORLD_ONE_VISUALS.terrain.ground2.edge, 'assets/world1/lasagna-cliff-edge.png');
+});
+
 test('controlled decoration skips narrow and non-ground terrain', () => {
   assert.deepEqual(
     decorationSlotsFor({ kind: 'ground', width: 7, top: 2, x: 0 }),

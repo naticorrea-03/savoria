@@ -535,8 +535,8 @@ export class GameSession {
     let groundY = this.level.killY;
     for (const solid of this.solids) {
       if (
-        player.pos.x > solid.aabb.minX - 0.2
-        && player.pos.x < solid.aabb.maxX + 0.2
+        player.pos.x >= solid.aabb.minX
+        && player.pos.x <= solid.aabb.maxX
         && solid.aabb.maxY <= player.pos.y + 0.1
         && solid.aabb.maxY > groundY
       ) {
