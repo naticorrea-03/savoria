@@ -103,17 +103,9 @@ export const WORLD_ONE_VISUALS = deepFreeze({
     opacity: 0.98,
     uv: { offsetX: 0.01, offsetY: 0.38, repeatX: 0.98, repeatY: 0.18 },
   },
-  props: [
-    {
-      id: 'basil',
-      path: 'assets/world1/basil-prop.png',
-      width: 1.25,
-      height: 1.25,
-      yOffset: 0.58,
-    },
-  ],
+  props: [],
   sprites: {
-    meatball: 'assets/sprites/meatball_walker.png',
+    meatball: 'assets/world1/marinara-puff.png',
     flyer: 'assets/sprites/pesto_flyer.png',
     shooter: 'assets/sprites/marinara_shooter.png',
     boss: 'assets/sprites/don_funghi.png',
@@ -122,7 +114,7 @@ export const WORLD_ONE_VISUALS = deepFreeze({
     speed: 'assets/sprites/speed_pasta.png',
     shield: 'assets/sprites/parmesan_shield.png',
     boost: 'assets/sprites/basil_boost.png',
-    goal: 'assets/sprites/goal_archway.png',
+    goal: 'assets/world1/golden-pasta-bell.png',
     start: 'assets/sprites/start_signpost.png',
   },
 });
@@ -149,6 +141,7 @@ export function terrainVisualFor(kind, manifest = WORLD_ONE_VISUALS) {
 export function decorationSlotsFor({ kind, width, top, x = 0 }, manifest = WORLD_ONE_VISUALS) {
   if (!['ground', 'ground2'].includes(kind) || width < 12) return [];
   const prop = manifest.props[0];
+  if (!prop) return [];
   const count = width >= 22 ? 2 : 1;
   const spread = Math.max(0, width / 2 - 3);
   const direction = Math.abs(Math.floor(x)) % 2 === 0 ? 1 : -1;

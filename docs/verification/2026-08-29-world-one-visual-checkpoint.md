@@ -19,11 +19,13 @@ This document records the local `feat/savoria-world-one` implementation verified
 - Completed 1-2 stars and the map artwork survive reload.
 - The mobile viewport shows only the desktop requirement.
 - Production requests stay local.
+- Each course includes a collectible basil pickup.
+- Players can jump once from the ground and once more in the air.
 
 ## Automated evidence
 
-- `npm test`: 86 passed, 0 failed.
-- `npm run test:browser`: 5 passed, 0 failed.
+- `npm test`: 89 passed, 0 failed.
+- `npm run test:browser`: 6 passed, 0 failed.
 - `git diff --check`: passed.
 - Screenshot capture at all three desktop sizes: no page errors, failed requests, or document overflow.
 
@@ -38,6 +40,9 @@ This document records the local `feat/savoria-world-one` implementation verified
 - Runtime edge cleanup removes pale checkerboard fringes from masked art.
 - No atlas labels, color swatches, or checkerboards are visible in the captured frames.
 - Tomatoes, enemies, players, and the marinara surface remain visually distinct.
+- The Marinara Puff replaces the legacy angry meatball sprite.
+- The Golden Pasta Bell replaces the isometric goal archway.
+- Decorative basil plants are removed, so every visible basil is collectible.
 - The HUD stays in the corners and leaves the playfield open.
 
 ## Captures
@@ -55,6 +60,9 @@ This document records the local `feat/savoria-world-one` implementation verified
 - `docs/verification/screenshots/world-one/pause-1-2-1440x900.png`
 - `docs/verification/screenshots/world-one/world-one-complete-1440x900.png`
 - `docs/verification/screenshots/world-one/world-map-resumed-1440x900.png`
+- `docs/verification/screenshots/world-one/fix-marinara-puff-1440x900.png`
+- `docs/verification/screenshots/world-one/fix-basil-pickup-1440x900.png`
+- `docs/verification/screenshots/world-one/fix-golden-pasta-bell-1440x900.png`
 
 The representative screenshot uses the existing test-only session getter to move the camera to the mid-course platform and hazard section. It does not bypass the production renderer.
 

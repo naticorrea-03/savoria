@@ -34,6 +34,16 @@ test('every released level validates and compiles to a goal', () => {
   }
 });
 
+test('every World 1 course contains a collectible basil pickup', () => {
+  for (const definition of RELEASED_LEVELS) {
+    const level = buildReleasedLevel(definition);
+    assert.ok(
+      level.items.some((item) => item.t === 'basil'),
+      `${definition.id} needs a basil pickup`,
+    );
+  }
+});
+
 test('released level validation rejects unsafe DSL mutations', () => {
   const invalidCases = [
     {

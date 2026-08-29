@@ -129,6 +129,7 @@ export class GameSession {
       d: 0.8,
       grounded: false,
       coyote: 0,
+      airJumpsRemaining: DEFAULT_MOTION.airJumps,
       facing: 1,
       groundMover: null,
     };
@@ -246,6 +247,7 @@ export class GameSession {
       depth: player.d,
       grounded: player.grounded,
       coyote: player.coyote,
+      airJumpsRemaining: player.airJumpsRemaining,
       jumpBuffer: 0,
       facing: player.facing,
     });
@@ -299,6 +301,7 @@ export class GameSession {
     player.vel.set(motion.velocityX, motion.velocityY, 0);
     player.grounded = motion.grounded;
     player.coyote = motion.coyote;
+    player.airJumpsRemaining = motion.airJumpsRemaining;
     player.facing = motion.facing;
   }
 
@@ -422,7 +425,9 @@ export class GameSession {
       sfx.power();
     }
     if (!this.goalObject) return false;
-    this.goalObject.userData.fork.rotation.y += dt * 1.6;
+    if (this.goalObject.userData.fork) {
+      this.goalObject.userData.fork.rotation.y += dt * 1.6;
+    }
     if (player.pos.distanceTo(this.goalObject.position) < 2.6) {
       this.complete();
       return true;

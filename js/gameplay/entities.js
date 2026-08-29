@@ -21,7 +21,8 @@ function makeSprite(textures, path, width, height) {
 
 export function spawnEnemy(context, enemy) {
   const size = enemy.t === 'meatball' ? 1.5 : enemy.t === 'flyer' ? 1.4 : 1.7;
-  const sprite = makeSprite(context.textures, SPRITES[enemy.t], size, size);
+  const path = context.level?.theme?.visuals?.sprites?.[enemy.t] ?? SPRITES[enemy.t];
+  const sprite = makeSprite(context.textures, path, size, size);
   sprite.position.set(enemy.p[0], enemy.p[1] + size * 0.35, enemy.p[2]);
   context.scene.add(sprite);
   context.enemies.push({

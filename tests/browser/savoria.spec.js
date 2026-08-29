@@ -138,6 +138,69 @@ test('1-1 pauses, resumes with Space, and replaces its canvas on restart', async
   await expectClean(page, diagnostics);
 });
 
+test('1-1 supports a double jump and collectible basil', async ({ page }) => {
+  const diagnostics = await monitorPage(page);
+
+  await startOneOne(page);
+  const result = await page.evaluate(() => {
+    const session = window.__savoriaTest.session;
+    const player = session.player;
+    player.pos.set(4, 20, 0);
+    player.vel.set(0, 0, 0);
+    player.grounded = true;
+
+    const jump = () => {
+      session.input.press('Space');
+      session.simulate(1 / 60);
+      session.input.release('Space');
+      return player.vel.y;
+    };
+    const firstJump = jump();
+    const doubleJump = jump();
+    const thirdAttempt = jump();
+
+    const basil = session.items.find((item) => item.t === 'basil');
+    if (!basil) {
+      return {
+        firstJump,
+        doubleJump,
+        thirdAttempt,
+        airJumpsRemaining: player.airJumpsRemaining,
+        hasBasil: false,
+      };
+    }
+    player.pos.copy(basil.sprite.position);
+    player.vel.set(0, 0, 0);
+    session.simulate(1 / 60);
+    const resourcePaths = performance.getEntriesByType('resource')
+      .map((entry) => new URL(entry.name).pathname);
+    return {
+      firstJump,
+      doubleJump,
+      thirdAttempt,
+      airJumpsRemaining: player.airJumpsRemaining,
+      hasBasil: true,
+      basilTaken: basil.taken,
+      hearts: session.hearts,
+      resourcePaths,
+    };
+  });
+
+  expect(result.firstJump).toBeGreaterThan(0);
+  expect(result.doubleJump).toBeGreaterThanOrEqual(result.firstJump - 0.01);
+  expect(result.thirdAttempt).toBeLessThan(result.doubleJump);
+  expect(result.airJumpsRemaining).toBe(0);
+  expect(result.hasBasil).toBe(true);
+  expect(result.basilTaken).toBe(true);
+  expect(result.hearts).toBe(4);
+  expect(result.resourcePaths).toContain('/assets/world1/marinara-puff.png');
+  expect(result.resourcePaths).toContain('/assets/world1/golden-pasta-bell.png');
+  expect(result.resourcePaths).not.toContain('/assets/sprites/meatball_walker.png');
+  expect(result.resourcePaths).not.toContain('/assets/sprites/goal_archway.png');
+  await expect(page.locator('#hud-hearts')).toHaveAttribute('aria-label', '4 hearts');
+  await expectClean(page, diagnostics);
+});
+
 test('production progression unlocks, completes, and resumes 1-2', async ({ page }) => {
   const diagnostics = await monitorPage(page);
 

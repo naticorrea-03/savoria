@@ -1,7 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../../vendor/three.module.js';
-import { updateEntities } from '../../js/gameplay/entities.js';
+import { spawnEnemy, updateEntities } from '../../js/gameplay/entities.js';
+
+test('World 1 enemies load the sprite selected by the visual manifest', () => {
+  let requestedPath = null;
+  const context = {
+    textures: {
+      texture(path) {
+        requestedPath = path;
+        return null;
+      },
+    },
+    level: {
+      theme: {
+        visuals: {
+          sprites: { meatball: 'assets/world1/marinara-puff.png' },
+        },
+      },
+    },
+    scene: new THREE.Scene(),
+    enemies: [],
+  };
+
+  spawnEnemy(context, { t: 'meatball', p: [4, 0, 0], range: 3 });
+
+  assert.equal(requestedPath, 'assets/world1/marinara-puff.png');
+});
 
 test('entity updates place the boss phase after projectiles and before particles', () => {
   const projectile = {

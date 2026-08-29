@@ -13,7 +13,7 @@ import {
 
 const TUTORIAL_COPY = [
   'Move',
-  'Jump',
+  'Jump again in the air',
   'Hold Shift to run',
   'Stomp from above',
 ];
@@ -251,7 +251,7 @@ test('jump prompts emit on safe ground before takeoff', () => {
     session.player.pos.x = jump.x;
     GameSession.prototype.updateTutorials.call(session);
 
-    assert.equal(session.messages.at(-1), 'Jump');
+    assert.equal(session.messages.at(-1), 'Jump again in the air');
     assert.ok(jump.x <= firstTransfer.takeoffX - 4);
     assert.ok(level.boxes.some((box) => {
       const [centerX, , , width, , , kind] = box;

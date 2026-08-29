@@ -16,14 +16,35 @@ test('motion uses the approved constants', () => {
     jumpCutSpeed: 6.5,
     coyoteSeconds: 0.12,
     jumpBufferSeconds: 0.13,
+    airJumps: 1,
     maxFallSpeed: 26,
   });
 });
 
-test('airborne players cannot jump twice', () => {
-  const state = createPlayerMotion({ grounded: false, coyote: 0, velocityY: -2 });
-  const next = stepPlayerMotion(state, { axis: 0, running: false, jumpPressed: true, jumpHeld: true }, EMPTY_WORLD, 1 / 60);
-  assert.ok(next.velocityY <= 0);
+test('airborne players get one extra jump but cannot jump a third time', () => {
+  const airborne = createPlayerMotion({
+    grounded: false,
+    coyote: 0,
+    velocityY: -2,
+    airJumpsRemaining: 1,
+  });
+  const doubleJump = stepPlayerMotion(
+    airborne,
+    { axis: 0, running: false, jumpPressed: true, jumpHeld: true },
+    EMPTY_WORLD,
+    1 / 60,
+  );
+  const thirdAttempt = stepPlayerMotion(
+    doubleJump,
+    { axis: 0, running: false, jumpPressed: true, jumpHeld: true },
+    EMPTY_WORLD,
+    1 / 60,
+  );
+
+  assert.ok(doubleJump.velocityY > 0);
+  assert.equal(doubleJump.airJumpsRemaining, 0);
+  assert.ok(thirdAttempt.velocityY < doubleJump.velocityY);
+  assert.equal(thirdAttempt.airJumpsRemaining, 0);
 });
 
 test('Shift raises target speed without changing walk acceleration', () => {
@@ -44,6 +65,7 @@ test('grounded players use one jump and consume its buffer', () => {
   assert.ok(next.velocityY > 0);
   assert.equal(next.grounded, false);
   assert.equal(next.jumpBuffer, 0);
+  assert.equal(next.airJumpsRemaining, 1);
 });
 
 test('coyote time permits one jump after leaving ground', () => {
@@ -88,6 +110,7 @@ test('landing on a solid restores grounded state', () => {
   assert.equal(next.positionY, 0);
   assert.equal(next.velocityY, 0);
   assert.equal(next.grounded, true);
+  assert.equal(next.airJumpsRemaining, 1);
 });
 
 test('ground movement steps onto a half-unit terrain rise without stopping', () => {

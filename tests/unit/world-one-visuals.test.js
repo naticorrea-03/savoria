@@ -38,6 +38,11 @@ test('asset collection is local, unique, and complete', () => {
   assert.ok(paths.includes('assets/sprites/tomato.png'));
 });
 
+test('World 1 enemy and finish marker use purpose-made Savoria assets', () => {
+  assert.equal(WORLD_ONE_VISUALS.sprites.meatball, 'assets/world1/marinara-puff.png');
+  assert.equal(WORLD_ONE_VISUALS.sprites.goal, 'assets/world1/golden-pasta-bell.png');
+});
+
 test('controlled decoration skips narrow and non-ground terrain', () => {
   assert.deepEqual(
     decorationSlotsFor({ kind: 'ground', width: 7, top: 2, x: 0 }),
@@ -49,11 +54,11 @@ test('controlled decoration skips narrow and non-ground terrain', () => {
   );
 });
 
-test('wide ground gets sparse props away from collision edges', () => {
-  const slots = decorationSlotsFor({ kind: 'ground', width: 24, top: 2, x: 30 });
-  assert.equal(slots.length, 2);
-  assert.ok(slots.every(({ xOffset }) => Math.abs(xOffset) <= 9));
-  assert.ok(slots.every(({ z }) => z < 0));
+test('basil is reserved for collectible items instead of background decoration', () => {
+  assert.deepEqual(
+    decorationSlotsFor({ kind: 'ground', width: 24, top: 2, x: 30 }),
+    [],
+  );
 });
 
 test('manifest is frozen through nested terrain and layers', () => {

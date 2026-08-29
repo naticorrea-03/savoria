@@ -10,6 +10,7 @@ export const DEFAULT_MOTION = Object.freeze({
   jumpCutSpeed: 6.5,
   coyoteSeconds: 0.12,
   jumpBufferSeconds: 0.13,
+  airJumps: 1,
   maxFallSpeed: 26,
 });
 
@@ -26,6 +27,7 @@ const DEFAULT_STATE = Object.freeze({
   grounded: false,
   coyote: 0,
   jumpBuffer: 0,
+  airJumpsRemaining: DEFAULT_MOTION.airJumps,
   facing: 1,
   targetSpeed: 0,
   acceleration: DEFAULT_MOTION.deceleration,
@@ -53,11 +55,14 @@ export function stepPlayerMotion(state, input = {}, world = { solids: [] }, dt, 
   next.jumpBuffer = Math.max(0, state.jumpBuffer - seconds);
   if (input.jumpPressed) next.jumpBuffer = motion.jumpBufferSeconds;
 
-  if (next.jumpBuffer > 0 && (state.grounded || next.coyote > 0)) {
+  const hasGroundJump = state.grounded || next.coyote > 0;
+  const hasAirJump = !hasGroundJump && next.airJumpsRemaining > 0;
+  if (next.jumpBuffer > 0 && (hasGroundJump || hasAirJump)) {
     next.velocityY = motion.jumpSpeed;
     next.jumpBuffer = 0;
     next.coyote = 0;
     next.grounded = false;
+    if (hasAirJump) next.airJumpsRemaining -= 1;
   }
 
   if (input.jumpHeld === false && next.velocityY > motion.jumpCutSpeed) {
@@ -66,6 +71,7 @@ export function stepPlayerMotion(state, input = {}, world = { solids: [] }, dt, 
 
   next.velocityY = Math.max(-motion.maxFallSpeed, next.velocityY - motion.gravity * seconds);
   resolveMovement(next, world?.solids || [], seconds);
+  if (next.grounded) next.airJumpsRemaining = motion.airJumps;
   next.positionZ = 0;
   next.velocityZ = 0;
   return next;

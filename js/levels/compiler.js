@@ -2,7 +2,7 @@ const D = 10;
 
 const TUTORIAL_TEXT = Object.freeze({
   move: 'Move',
-  jump: 'Jump',
+  jump: 'Jump again in the air',
   run: 'Hold Shift to run',
   stomp: 'Stomp from above',
 });

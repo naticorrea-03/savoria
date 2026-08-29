@@ -1,4 +1,5 @@
 import { AABB } from './aabb.js';
+import { spawnEnemy } from '../gameplay/entities.js';
 import {
   WORLD_ONE_VISUALS,
   collectWorldOneAssets,
@@ -346,24 +347,6 @@ function createWorldTools(THREE) {
     return g;
   }
 
-  function buildGoalFork() {
-    const g = new THREE.Group();
-    const gold = new THREE.MeshStandardMaterial({ color: 0xf2c14e, metalness: 0.7, roughness: 0.3, emissive: 0x664400 });
-    const plinth = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2, 0.6, 10), mat(0xd9c9a0));
-    plinth.position.y = 0.3; g.add(plinth);
-    const fork = new THREE.Group();
-    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 3.4, 8), gold);
-    handle.position.y = 2.3; fork.add(handle);
-    const head = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.5, 0.16), gold);
-    head.position.y = 4.1; fork.add(head);
-    for (let i = -1; i <= 1; i++) {
-      const tine = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 1.1, 6), gold);
-      tine.position.set(i * 0.4, 4.85, 0); fork.add(tine);
-    }
-    fork.traverse((o) => { o.castShadow = true; });
-    g.add(fork); g.userData.fork = fork;
-    return g;
-  }
   return {
     skyTexture,
     makeSprite,
@@ -372,20 +355,7 @@ function createWorldTools(THREE) {
     visualMaterial,
     addTerrainVisual,
     buildDeco,
-    buildGoalFork,
   };
-}
-
-function spawnEnemy(state, e, tools) {
-  const { makeSprite } = tools;
-  const size = e.t === 'meatball' ? 1.5 : e.t === 'flyer' ? 1.4 : 1.7;
-  const s = makeSprite(state.textures, SPRITES[e.t], size, size);
-  s.position.set(e.p[0], e.p[1] + size * 0.35, e.p[2]);
-  state.scene.add(s);
-  state.enemies.push({
-    t: e.t, sprite: s, base: [...e.p], range: Math.max(1.5, e.range || 5),
-    t0: Math.random() * 6, dead: false, size, shootT: 1.5, half: size * 0.42,
-  });
 }
 
 function buildWorld(state, tools) {
@@ -397,7 +367,6 @@ function buildWorld(state, tools) {
     visualTexture,
     visualMaterial,
     buildDeco,
-    buildGoalFork,
   } = tools;
   const L = state.level, th = L.theme, C = th.colors;
 
@@ -509,7 +478,7 @@ function buildWorld(state, tools) {
     state.items.push({ sprite: s, bubble, t: it.t, base: s.position.y, taken: false });
   }
 
-  for (const e of L.enemies || []) spawnEnemy(state, e, tools);
+  for (const e of L.enemies || []) spawnEnemy(state, e);
 
   if (L.boss) {
     const s = makeSprite(state.textures, SPRITES.boss, 5.2, 5.2);
@@ -538,16 +507,11 @@ function buildWorld(state, tools) {
   }
 
   if (L.goal) {
-    // her painted GOAL archway, with the golden fork spinning behind it
     state.goalObj = new THREE.Group();
-    const arch = makeSprite(state.textures, 'assets/sprites/goal_archway.png', 6.4, 6.4);
+    const arch = makeSprite(state.textures, SPRITES.goal, 6.4, 6.4);
     arch.position.y = 3.1;
     state.goalObj.add(arch);
-    const fork = buildGoalFork();
-    fork.scale.setScalar(0.6);
-    fork.position.set(0, 3.6, -1);
-    state.goalObj.add(fork);
-    state.goalObj.userData.fork = fork.userData.fork;
+    state.goalObj.userData.fork = null;
     state.goalObj.position.set(...L.goal);
     state.scene.add(state.goalObj);
   }
