@@ -1,35 +1,56 @@
 import { AABB } from './aabb.js';
+import {
+  WORLD_ONE_VISUALS,
+  collectWorldOneAssets,
+  decorationSlotsFor,
+  terrainVisualFor,
+} from '../visuals/world-one-manifest.js';
 
-const TILES = {
-  top: 'assets/sprites/tile_top.png',
-  fill: 'assets/sprites/tile_fill.png',
-  wall: 'assets/sprites/tile_wall.png',
-  plat: 'assets/sprites/tile_plat.png',
-  river: 'assets/sprites/tile_river.png',
-  pillar: 'assets/sprites/tile_pillar.png',
-};
-const PROPS = ['assets/sprites/bush.png', 'assets/sprites/grass_tuft.png',
-  'assets/sprites/pasta_plant.png', 'assets/sprites/small_mushroom.png'];
+const SPRITES = WORLD_ONE_VISUALS.sprites;
 
-const SPRITES = {
-  meatball: 'assets/sprites/meatball_walker.png',
-  flyer: 'assets/sprites/pesto_flyer.png',
-  shooter: 'assets/sprites/marinara_shooter.png',
-  boss: 'assets/sprites/don_funghi.png',
-  tomato: 'assets/sprites/tomato.png',
-  basil: 'assets/sprites/basil_leaf.png',
-  speed: 'assets/sprites/speed_pasta.png',
-  shield: 'assets/sprites/parmesan_shield.png',
-  boost: 'assets/sprites/basil_boost.png',
-};
+export const WORLD_ONE_ASSETS = collectWorldOneAssets();
 
-export const WORLD_ONE_ASSETS = [...new Set([
-  ...Object.values(TILES),
-  ...PROPS,
-  ...Object.values(SPRITES),
-  'assets/sprites/goal_archway.png',
-  'assets/sprites/start_signpost.png',
-])];
+export function backgroundLayerX(cameraX, layers = WORLD_ONE_VISUALS.backgrounds) {
+  return layers.map(({ parallax }) => Number((cameraX * parallax).toFixed(6)));
+}
+
+export function terrainPlaneZ(_collisionDepth, offset = 0) {
+  return WORLD_ONE_VISUALS.plane.gameplayZ + offset;
+}
+
+export function fitVisualUv(uv, sourceAspect, width, height) {
+  if (!uv || !sourceAspect || width / height >= sourceAspect) return uv;
+  const repeatX = uv.repeatX * ((width / height) / sourceAspect);
+  return {
+    ...uv,
+    offsetX: uv.offsetX + (uv.repeatX - repeatX) / 2,
+    repeatX,
+  };
+}
+
+export function mergeGroundVisualRuns(boxes) {
+  const runs = [];
+  for (const box of boxes) {
+    const [x, y, z, w, h, d, kind] = box;
+    if (!['ground', 'ground2'].includes(kind)) continue;
+    const previous = runs.at(-1);
+    const touchesPrevious = previous
+      && Math.abs(previous[0] + previous[3] / 2 - (x - w / 2)) < 1e-4
+      && previous[1] === y
+      && previous[2] === z
+      && previous[4] === h
+      && previous[5] === d;
+    if (touchesPrevious) {
+      const left = previous[0] - previous[3] / 2;
+      const right = x + w / 2;
+      previous[0] = (left + right) / 2;
+      previous[3] = right - left;
+    } else {
+      runs.push([x, y, z, w, h, d, 'ground']);
+    }
+  }
+  return runs;
+}
 
 function createWorldTools(THREE) {
   function skyTexture(top, bottom) {
@@ -52,13 +73,116 @@ function createWorldTools(THREE) {
 
   const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
 
-  // six-face material set for painted terrain boxes: lasagna sides, basil-lasagna top.
-  // World-aligned offsets keep the pattern continuous across adjacent boxes.
-  function groundMats(textures, x, y, z, w, h, d, tint) {
-    const side = (rw, o) => new THREE.MeshLambertMaterial({ color: tint, map: textures.tiled(TILES.fill, rw / 4, h / 4, o / 4, y / 4) });
-    const top = new THREE.MeshLambertMaterial({ color: tint, map: textures.tiled(TILES.top, w / 4, d / 4, (x - w / 2) / 4, (z - d / 2) / 4) });
-    const bottom = mat(0x554433);
-    return [side(d, z - d / 2), side(d, z - d / 2), top, bottom, side(w, x - w / 2), side(w, x - w / 2)];
+  function visualTexture(
+    textures,
+    path,
+    uv,
+    removeLightNeutral = false,
+    featherBottom = 0,
+  ) {
+    if (featherBottom) {
+      return textures.cropped(path, uv, {
+        removeLightNeutral,
+        featherBottom,
+        featherTop: 0.04,
+      });
+    }
+    const texture = removeLightNeutral ? textures.masked(path) : textures.clone(path);
+    if (uv) {
+      texture.repeat.set(uv.repeatX, uv.repeatY);
+      texture.offset.set(uv.offsetX, uv.offsetY);
+    }
+    texture.needsUpdate = true;
+    return texture;
+  }
+
+  function visualMaterial(textures, path, uv, {
+    opacity = 1,
+    tint = 0xffffff,
+    removeLightNeutral = false,
+    tileWidth = 0,
+    width = 0,
+    worldLeft = 0,
+  } = {}) {
+    const map = tileWidth
+      ? textures.cropped(path, uv, {
+        removeLightNeutral,
+        seamlessHorizontal: true,
+      })
+      : visualTexture(textures, path, uv, removeLightNeutral);
+    if (tileWidth) {
+      map.wrapS = THREE.RepeatWrapping;
+      map.repeat.set(width / tileWidth, 1);
+      map.offset.set(worldLeft / tileWidth, 0);
+      map.needsUpdate = true;
+    }
+    return new THREE.MeshBasicMaterial({
+      map,
+      color: tint ?? 0xffffff,
+      transparent: true,
+      opacity,
+      alphaTest: 0.02,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+  }
+
+  function addTerrainVisual(mesh, textures, kind, w, h, d) {
+    const visual = terrainVisualFor(kind);
+    const isPlatform = kind === 'plat' || kind === 'brick';
+    const faceHeight = isPlatform ? Math.max(0.9, h) : h;
+    const visualWidth = w;
+    const tileWidth = 0;
+    const faceUv = fitVisualUv(
+      visual.faceUv,
+      visual.sourceAspect,
+      visualWidth,
+      faceHeight,
+    );
+    const worldLeft = mesh.position.x - visualWidth / 2;
+    const face = new THREE.Mesh(
+      new THREE.PlaneGeometry(visualWidth, faceHeight),
+      visualMaterial(textures, visual.face, faceUv, {
+        tint: visual.tint,
+        removeLightNeutral: visual.removeLightNeutral,
+        tileWidth,
+        width: visualWidth,
+        worldLeft,
+      }),
+    );
+    face.position.set(0, h / 2 - faceHeight / 2, terrainPlaneZ(d, visual.faceDepth));
+    mesh.add(face);
+
+    if (visual.skirtDepth) {
+      const skirt = new THREE.Mesh(
+        new THREE.PlaneGeometry(visualWidth, visual.skirtDepth),
+        visualMaterial(textures, visual.face, faceUv, {
+          tint: visual.skirtTint,
+          tileWidth,
+          width: visualWidth,
+          worldLeft,
+        }),
+      );
+      skirt.position.set(
+        0,
+        -h / 2 - visual.skirtDepth / 2,
+        terrainPlaneZ(d, visual.faceDepth - 0.01),
+      );
+      mesh.add(skirt);
+    }
+
+    if (visual.cap && !isPlatform) {
+      const cap = new THREE.Mesh(
+        new THREE.PlaneGeometry(visualWidth, visual.capDepth),
+        visualMaterial(textures, visual.cap),
+      );
+      cap.position.set(
+        0,
+        h / 2 - visual.capDepth / 2,
+        terrainPlaneZ(d, visual.faceDepth + 0.02),
+      );
+      mesh.add(cap);
+    }
   }
 
   // ── Decoration builders (one per world flavor) ─────────────────────────
@@ -240,7 +364,16 @@ function createWorldTools(THREE) {
     g.add(fork); g.userData.fork = fork;
     return g;
   }
-  return { skyTexture, makeSprite, mat, groundMats, buildDeco, buildGoalFork };
+  return {
+    skyTexture,
+    makeSprite,
+    mat,
+    visualTexture,
+    visualMaterial,
+    addTerrainVisual,
+    buildDeco,
+    buildGoalFork,
+  };
 }
 
 function spawnEnemy(state, e, tools) {
@@ -257,79 +390,47 @@ function spawnEnemy(state, e, tools) {
 
 function buildWorld(state, tools) {
   const { THREE } = state;
-  const { mat, groundMats, makeSprite, buildDeco, buildGoalFork } = tools;
+  const {
+    mat,
+    makeSprite,
+    addTerrainVisual,
+    visualTexture,
+    visualMaterial,
+    buildDeco,
+    buildGoalFork,
+  } = tools;
   const L = state.level, th = L.theme, C = th.colors;
-  const matCache = {};
-  const matFor = (key) => matCache[key] || (matCache[key] = mat(C[key] ?? 0x888888));
 
-  const tint = new THREE.Color(th.tint ?? 0xffffff);
-  const tint2 = tint.clone().multiplyScalar(0.82);
-  // melted sauce/cheese dressing: shared mats + geo, added as children so movers carry theirs
-  const meltCol = new THREE.Color(th.melt ?? 0xd8341c);
-  const meltMat = new THREE.MeshLambertMaterial({ color: meltCol });
-  const meltMat2 = new THREE.MeshLambertMaterial({ color: meltCol.clone().multiplyScalar(0.78) });
-  const dripGeo = new THREE.CapsuleGeometry(0.14, 0.34, 3, 6);
-  const holeMat = new THREE.MeshLambertMaterial({ color: 0xb08428 });
-  const holeGeo = new THREE.CircleGeometry(0.24, 10);
-  const dress = (mesh, w, h, d, kind) => {
-    // sauce oozes over the front lip only; the painted top stays visible
-    const seed = Math.abs(Math.floor(mesh.position.x * 7 + mesh.position.y * 3));
-    const band = new THREE.Mesh(
-      new THREE.BoxGeometry(w + 0.24, (kind === 'plat' ? 0.3 : 0.44) + (seed % 3) * 0.07, 0.24),
-      seed % 2 ? meltMat : meltMat2);
-    band.position.set(0, h / 2 - 0.12, d / 2 + 0.06);
-    mesh.add(band);
-    const nd = Math.max(2, Math.round(w / 2.4));
-    for (let i = 0; i < nd; i++) {
-      const lx = -w / 2 + 0.5 + ((seed + i * 2.17) * 1.31) % Math.max(0.6, w - 1);
-      const len = 0.5 + ((seed + i * 3) % 3) * 0.28;
-      const drip = new THREE.Mesh(dripGeo, i % 2 ? meltMat : meltMat2);
-      drip.position.set(lx, h / 2 - 0.3 - len * 0.22, d / 2 + 0.1);
-      drip.scale.y = len;
-      mesh.add(drip);
-    }
-    if (kind === 'brick') {   // swiss-cheese holes on the front face
-      for (let i = 0; i < 2; i++) {
-        const hole = new THREE.Mesh(holeGeo, holeMat);
-        hole.position.set(-w / 4 + (i * w) / 2 + ((seed % 3) - 1) * 0.15, ((seed + i) % 2) * 0.3 - 0.15, d / 2 + 0.02);
-        hole.scale.setScalar(0.8 + ((seed + i) % 2) * 0.4);
-        mesh.add(hole);
-      }
-    }
-  };
-  let propSeed = 0;
   for (const b of L.boxes) {
     const [x, y, z, w, h, d, ck] = b;
-    let material;
-    if (ck === 'ground' || ck === 'ground2') {
-      material = groundMats(state.textures, x, y, z, w, h, d, ck === 'ground' ? tint : tint2);
-    } else if (ck === 'brick') {
-      // cheese blocks: golden, hole-pocked (holes added in dress())
-      material = new THREE.MeshLambertMaterial({ color: 0xf2cc5a, map: state.textures.tiled(TILES.plat, w / 3.4, h / 3.4) });
-    } else if (ck === 'pillar') {
-      material = new THREE.MeshLambertMaterial({ color: tint, map: state.textures.tiled(TILES.pillar, 1, h / 3.5) });
-    } else if (ck === 'plat') {
-      material = new THREE.MeshLambertMaterial({ color: tint, map: state.textures.tiled(TILES.plat, w / 3.4, d / 3.4) });
-    } else {
-      material = matFor(ck);
-    }
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(w, h, d),
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+    );
     mesh.position.set(x, y, z);
-    mesh.castShadow = mesh.receiveShadow = true;
+    if (!['ground', 'ground2'].includes(ck)) {
+      addTerrainVisual(mesh, state.textures, ck, w, h, d);
+    }
     state.scene.add(mesh);
     state.solids.push({ mesh, aabb: new AABB(x, y, z, w, h, d) });
-    if (ck === 'ground' || ck === 'ground2' || ck === 'plat' || ck === 'brick') dress(mesh, w, h, d, ck);
-    // painted props on wide ground tops
-    if ((ck === 'ground' || ck === 'ground2') && w >= 8 && y + h / 2 < 15) {
-      const n = w > 14 ? 2 : 1;
-      for (let i = 0; i < n; i++) {
-        propSeed++;
-        const p = makeSprite(state.textures, PROPS[propSeed % PROPS.length], 1.5, 1.5);
-        p.material.color.set(tint);
-        p.position.set(x - w / 2 + 2 + ((propSeed * 5.3) % (w - 4)), y + h / 2 + 0.7, 2.6);
-        state.scene.add(p);
-      }
+
+    for (const slot of decorationSlotsFor({
+      kind: ck,
+      width: w,
+      top: y + h / 2,
+      x,
+    })) {
+      const prop = makeSprite(state.textures, slot.path, slot.width, slot.height);
+      prop.position.set(x + slot.xOffset, slot.y, slot.z);
+      state.scene.add(prop);
     }
+  }
+
+  for (const [x, y, z, w, h, d, kind] of mergeGroundVisualRuns(L.boxes)) {
+    const visualRoot = new THREE.Group();
+    visualRoot.position.set(x, y, z);
+    addTerrainVisual(visualRoot, state.textures, kind, w, h, d);
+    state.scene.add(visualRoot);
   }
 
   // bonus doors (teleport pairs)
@@ -354,10 +455,12 @@ function buildWorld(state, tools) {
 
   for (const m of L.movers || []) {
     const [x, y, z, w, h, d] = m.box;
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
-      new THREE.MeshLambertMaterial({ color: tint, map: state.textures.tiled(TILES.plat, 1, 1), emissive: 0x221100 }));
-    mesh.castShadow = mesh.receiveShadow = true;
-    dress(mesh, w, h, d, 'plat');
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(w, h, d),
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+    );
+    mesh.position.set(x, y, z);
+    addTerrainVisual(mesh, state.textures, 'plat', w, h, d);
     state.scene.add(mesh);
     state.solids.push({
       mesh, aabb: new AABB(x, y, z, w, h, d),
@@ -368,9 +471,22 @@ function buildWorld(state, tools) {
   state.hazards = [];
   for (const hz of L.hazards || []) {
     const [x, y, z, w, d] = hz;
-    const rt = state.textures.tiled(TILES.river, w / 6, d / 6);
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.6, d),
-      new THREE.MeshStandardMaterial({ map: rt, color: th.hazardTint ?? 0xffffff, emissive: th.hazardEmissive, emissiveIntensity: 0.4, roughness: 0.35 }));
+    const rt = visualTexture(
+      state.textures,
+      WORLD_ONE_VISUALS.hazard.surface,
+      WORLD_ONE_VISUALS.hazard.uv,
+      WORLD_ONE_VISUALS.hazard.removeLightNeutral,
+    );
+    rt.wrapS = THREE.RepeatWrapping;
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, 1.1),
+      new THREE.MeshBasicMaterial({
+        map: rt,
+        transparent: true,
+        opacity: WORLD_ONE_VISUALS.hazard.opacity,
+        depthWrite: false,
+      }),
+    );
     mesh.position.set(x, y, z);
     state.scene.add(mesh);
     state.hazards.push({ mesh, aabb: new AABB(x, y + 0.1, z, w, 1.0, d), baseY: y, tex: rt });
@@ -440,11 +556,13 @@ function buildWorld(state, tools) {
   sign.position.set(L.spawn[0] + 2.5, L.spawn[1] - 2.8, 1.5);
   state.scene.add(sign);
 
-  for (const d of L.deco || []) {
-    const g = buildDeco(d.t, d.s || 1);
-    g.position.set(...d.p);
-    state.scene.add(g);
-    if (g.userData.spin) state.decoSpins.push(g.userData.spin);
+  if (!L.theme.visuals) {
+    for (const d of L.deco || []) {
+      const g = buildDeco(d.t, d.s || 1);
+      g.position.set(...d.p);
+      state.scene.add(g);
+      if (g.userData.spin) state.decoSpins.push(g.userData.spin);
+    }
   }
 }
 
@@ -512,6 +630,42 @@ function buildParallax(state, tools) {
   }
 }
 
+function buildVisualBackground(state, tools) {
+  const layers = state.level.theme.visuals.backgrounds.map((definition, index) => {
+    const material = new state.THREE.SpriteMaterial({
+      map: tools.visualTexture(
+        state.textures,
+        definition.path,
+        definition.uv,
+        definition.removeLightNeutral,
+        definition.featherBottom,
+      ),
+      color: 0xffffff,
+      transparent: definition.id !== 'far',
+      opacity: definition.opacity,
+      alphaTest: definition.removeLightNeutral ? 0.22 : 0,
+      blending: state.THREE.NormalBlending,
+      depthWrite: false,
+      depthTest: false,
+      fog: false,
+    });
+    const sprite = new state.THREE.Sprite(material);
+    sprite.scale.set(definition.width, definition.height, 1);
+    sprite.position.set(0, definition.y, definition.z);
+    sprite.renderOrder = -100 + index;
+    state.scene.add(sprite);
+    return { definition, sprite };
+  });
+
+  return (cameraX, cameraY) => {
+    const shifts = backgroundLayerX(cameraX, layers.map(({ definition }) => definition));
+    layers.forEach(({ definition, sprite }, index) => {
+      sprite.position.x = cameraX - shifts[index];
+      sprite.position.y = cameraY + definition.y - 5;
+    });
+  };
+}
+
 export function buildWorldScene({ THREE, scene, level, textures }) {
   const rootsBeforeBuild = new Set(scene.children);
   const tools = createWorldTools(THREE);
@@ -559,7 +713,10 @@ export function buildWorldScene({ THREE, scene, level, textures }) {
   state.sun = sun;
 
   buildWorld(state, tools);
-  buildParallax(state, tools);
+  const updateBackground = theme.visuals
+    ? buildVisualBackground(state, tools)
+    : () => {};
+  if (!theme.visuals) buildParallax(state, tools);
 
   const roots = scene.children.filter((child) => !rootsBeforeBuild.has(child));
   let disposed = false;
@@ -590,6 +747,7 @@ export function buildWorldScene({ THREE, scene, level, textures }) {
     goalObject: state.goalObj,
     bossState: state.bossState,
     sun,
+    updateBackground,
     dispose,
   };
 }

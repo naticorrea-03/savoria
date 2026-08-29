@@ -3,11 +3,23 @@ import assert from 'node:assert/strict';
 import { shouldCaptureGameplayInput } from '../../js/core/game-session.js';
 import { createTextureStore } from '../../js/core/texture-store.js';
 import {
+  CHARACTERS,
   applyGameBackgroundState,
   createWebGLCapabilityProbe,
   initialUiState,
   reduceUiState,
 } from '../../js/ui/ui-state.js';
+
+test('character selection uses static portrait artwork', () => {
+  assert.deepEqual(
+    CHARACTERS.map(({ img }) => img),
+    [
+      'assets/sprites/fatsio.png',
+      'assets/sprites/dinnerette.png',
+      'assets/sprites/chefno.png',
+    ],
+  );
+});
 
 test('the release flow exposes the approved screen states', () => {
   let state = initialUiState();
@@ -50,6 +62,18 @@ test('course completion unlocks 1-2 and returns to the World 1 map', () => {
 
   const world = reduceUiState(next, { type: 'CONTINUE' });
   assert.equal(world.screen, 'world');
+});
+
+test('finishing 1-2 enters the World 1 completion state', () => {
+  const next = reduceUiState(initialUiState(), {
+    type: 'COURSE_COMPLETE',
+    levelId: '1-2',
+    stars: 3,
+    stats: { coins: 12, totalCoins: 12, time: 96 },
+  });
+  assert.equal(next.screen, 'complete');
+  assert.equal(next.completion.worldComplete, true);
+  assert.equal(next.save.best['1-2'], 3);
 });
 
 test('asset failure enters a retryable error state', () => {

@@ -70,7 +70,7 @@ async function waitForTitle(page) {
 async function openWorldOne(page) {
   await page.goto('/play/');
   await waitForTitle(page);
-  await page.getByRole('button', { name: 'Start Adventure' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
   await page.getByRole('button', { name: /^Fatsio/ }).click();
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'world');
 }
@@ -90,8 +90,9 @@ test('landing reaches chef selection and shows only the World 1 release', async 
   await page.getByRole('link', { name: 'Play Savoria' }).click();
   await expect(page).toHaveURL(/\/play\/$/);
   await waitForTitle(page);
-  await page.getByRole('button', { name: 'Start Adventure' }).click();
-  await expect(page.getByRole('heading', { name: 'Choose your chef' })).toBeVisible();
+  await page.getByRole('button', { name: 'Play' }).click();
+  await expect(page.getByRole('heading', { name: 'Who is cooking?' })).toBeVisible();
+  await expect(page.getByText('Every chef shares the same moves. Pick your favorite.')).toBeVisible();
   await expect(page.locator('#char-cards button')).toHaveCount(3);
 
   await page.getByRole('button', { name: /^Dinnerette/ }).click();
@@ -104,7 +105,7 @@ test('landing reaches chef selection and shows only the World 1 release', async 
 
   await page.reload();
   await waitForTitle(page);
-  await page.getByRole('button', { name: 'Start Adventure' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
   await expect(page.getByRole('button', { name: /^Dinnerette/ })).toHaveAttribute('aria-pressed', 'true');
   await expectClean(page, diagnostics);
 });
@@ -137,7 +138,7 @@ test('1-1 pauses, resumes with Space, and replaces its canvas on restart', async
   await expectClean(page, diagnostics);
 });
 
-test('production progression unlocks, starts, pauses, and restarts 1-2', async ({ page }) => {
+test('production progression unlocks, completes, and resumes 1-2', async ({ page }) => {
   const diagnostics = await monitorPage(page);
 
   await startOneOne(page);
@@ -154,7 +155,7 @@ test('production progression unlocks, starts, pauses, and restarts 1-2', async (
 
   await page.reload();
   await waitForTitle(page);
-  await page.getByRole('button', { name: 'Start Adventure' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
   await page.getByRole('button', { name: /^Fatsio/ }).click();
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'world');
   const penneRidge = page.getByRole('button', { name: /1-2 Penne Ridge/ });
@@ -179,6 +180,22 @@ test('production progression unlocks, starts, pauses, and restarts 1-2', async (
   await expect(page.locator('#hlp-num')).toHaveText('1-2');
   await expect(page.locator('#game-stage canvas')).toHaveCount(1);
   expect(await firstCanvas.evaluate((canvas) => canvas.isConnected)).toBe(false);
+
+  await page.evaluate(() => {
+    const session = window.__savoriaTest.session;
+    session.player.pos.copy(session.goalObject.position);
+    session.player.vel.set(0, 0, 0);
+  });
+  await expect(page.locator('#app')).toHaveAttribute('data-screen', 'complete');
+  await expect(page.getByRole('heading', { name: 'World 1 complete!' })).toBeVisible();
+  await page.getByRole('button', { name: 'World 1 map' }).click();
+
+  await page.reload();
+  await waitForTitle(page);
+  await page.getByRole('button', { name: 'Play' }).click();
+  await page.getByRole('button', { name: /^Fatsio/ }).click();
+  await expect(page.locator('#app')).toHaveAttribute('data-screen', 'world');
+  await expect(page.getByRole('button', { name: /1-2 Penne Ridge, 2 of 3 stars/ })).toBeEnabled();
   await expectClean(page, diagnostics);
 });
 

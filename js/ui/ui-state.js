@@ -2,9 +2,24 @@ import { RELEASED_LEVELS, RELEASED_WORLDS } from '../levels/index.js';
 import { createFreshSave, recordCompletion } from './save-store.js';
 
 export const CHARACTERS = [
-  { id: 'fatsio', name: 'Fatsio', desc: 'Big heart, bigger appetite.', img: 'assets/sprites/fatsio.png' },
-  { id: 'dinnerette', name: 'Dinnerette', desc: 'Royalty with a whisk.', img: 'assets/sprites/dinnerette.png' },
-  { id: 'chefno', name: 'Chefno', desc: 'Small chef, huge flavor.', img: 'assets/sprites/chefno.png' },
+  {
+    id: 'fatsio',
+    name: 'Fatsio',
+    desc: 'Big heart, bigger appetite.',
+    img: 'assets/sprites/fatsio.png',
+  },
+  {
+    id: 'dinnerette',
+    name: 'Dinnerette',
+    desc: 'Royalty with a whisk.',
+    img: 'assets/sprites/dinnerette.png',
+  },
+  {
+    id: 'chefno',
+    name: 'Chefno',
+    desc: 'Small chef, huge flavor.',
+    img: 'assets/sprites/chefno.png',
+  },
 ];
 
 const RELEASED_IDS = new Set(RELEASED_LEVELS.map(({ id }) => id));
@@ -161,6 +176,7 @@ export function reduceUiState(state, event) {
           levelId: event.levelId,
           stars: Math.min(3, Math.max(0, event.stars)),
           stats: event.stats ?? {},
+          worldComplete: event.levelId === '1-2',
         },
       };
     }
@@ -208,6 +224,7 @@ function makeCharacterButton(doc, character, selectedId, primary = false) {
   button.dataset.action = 'choose-character';
   button.dataset.characterId = character.id;
   if (primary) button.dataset.primary = '';
+  button.setAttribute('aria-label', `${character.name}: ${character.desc}`);
   button.setAttribute('aria-pressed', String(character.id === selectedId));
   const image = doc.createElement('img');
   image.src = character.img;
@@ -240,6 +257,7 @@ function makeLevelButton(doc, level, index, state) {
   button.dataset.action = 'select-level';
   button.dataset.levelId = level.id;
   button.dataset.levelIndex = String(index);
+  button.dataset.levelName = level.name;
   if (open && index === Math.max(0, state.save.unlocked - 1)) {
     button.dataset.primary = '';
   }
@@ -273,7 +291,7 @@ function renderWorld(doc, state) {
     );
     const strip = doc.createElement('section');
     strip.className = 'world-strip';
-    strip.style.backgroundImage = `url('${world.thumb}')`;
+    strip.style.backgroundImage = "url('assets/world1/world-map-background.png')";
     strip.setAttribute('aria-label', `World ${world.n}, ${world.name}`);
 
     const badge = doc.createElement('div');

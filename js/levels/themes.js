@@ -1,13 +1,14 @@
+import { WORLD_ONE_VISUALS } from '../visuals/world-one-manifest.js';
+
 export const THEMES = {
   pasta: {
+    visuals: WORLD_ONE_VISUALS,
     tint: 0xffffff, hazardTint: 0xffffff, melt: 0xd8341c,
-    bg: 'assets/sprites/bg1.jpg',
     skyTop: 0x4fa4e8, skyBottom: 0xbfe2f8, fog: 0xf7d99a, fogFar: 150,
     sun: 0xfff2cc, sunPos: [40, 60, 25], ambient: 0xffe6c0,
     colors: { ground: 0xe2b04a, ground2: 0xcf9a35, plat: 0xf0d27a, brick: 0xc96a2e, top: 0xf2d488 },
     hazardColor: 0xc22f1d, hazardEmissive: 0x8a1205,
-    hills: [0xd9b060, 0xc9a050], deco: ['cypress', 'windmill'],
-    skyline: ['villa', 'campanile', 'cypress', 'windmill'],
+    hills: [0xd9b060, 0xc9a050], deco: [], skyline: [],
   },
   sushi: {
     tint: 0xdcecd0, hazardTint: 0xd8b860, melt: 0x9ac858,

@@ -1,7 +1,7 @@
 import * as THREE from '../../vendor/three.module.js';
 import { sfx } from '../audio/sfx.js';
 import { AABB } from './aabb.js';
-import { buildChef, animateChefRig } from './chef-rig.js';
+import { buildChefSprite, animateChefSprite } from './chef-sprite.js';
 import { FixedStepLoop } from './fixed-step-loop.js';
 import { buildWorldScene } from './world-builder.js';
 import { updateBoss } from '../gameplay/boss.js';
@@ -15,7 +15,6 @@ import {
 
 export const INITIAL_HEARTS = 3;
 const MAX_HEARTS = 5;
-const BASE_ANIMATION_SPEED = 8.6;
 const GAMEPLAY_CODES = new Set([
   'Space',
   'ArrowUp',
@@ -120,9 +119,8 @@ export class GameSession {
   }
 
   buildPlayer() {
-    this.rig = buildChef(this.characterId);
+    this.rig = buildChefSprite(THREE, this.textures, this.characterId);
     this.scene.add(this.rig);
-    this.rig.rotation.y = 1.15;
     this.player = {
       pos: new THREE.Vector3(...this.level.spawn),
       vel: new THREE.Vector3(),
@@ -290,7 +288,7 @@ export class GameSession {
 
     updateEntities(this, dt, () => updateBoss(this, dt));
     player.invuln = this.invuln;
-    animateChefRig(this.rig, player, this.elapsed, dt, BASE_ANIMATION_SPEED);
+    animateChefSprite(this.rig, player, this.elapsed);
     this.updateShadow();
     this.updateCamera(dt);
   }
@@ -435,10 +433,11 @@ export class GameSession {
   burst(position, color, count = 10, spread = 4) {
     for (let index = 0; index < count; index += 1) {
       const mesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.22, 0.22),
+        new THREE.CircleGeometry(0.11, 8),
         new THREE.MeshBasicMaterial({
           color,
           transparent: true,
+          opacity: 0.72,
           side: THREE.DoubleSide,
         }),
       );
@@ -560,6 +559,10 @@ export class GameSession {
       this.camera.position.x,
       this.camera.position.y - 1.8,
       0,
+    );
+    this.sceneState.updateBackground?.(
+      this.camera.position.x,
+      this.camera.position.y,
     );
     this.sun.position.set(
       player.pos.x + this.level.theme.sunPos[0] * 0.4,

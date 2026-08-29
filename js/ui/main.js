@@ -1,6 +1,7 @@
 import * as THREE from '../../vendor/three.module.js';
 import { sfx } from '../audio/sfx.js';
 import { GameSession } from '../core/game-session.js';
+import { chefSpriteConfig } from '../core/chef-sprite.js';
 import { createTextureStore } from '../core/texture-store.js';
 import { WORLD_ONE_ASSETS } from '../core/world-builder.js';
 import {
@@ -157,7 +158,7 @@ async function startLevel(index) {
 
   try {
     await textures.preload(
-      WORLD_ONE_ASSETS,
+      [...WORLD_ONE_ASSETS, chefSpriteConfig(uiState.save.chef).path],
       createActiveProgressReporter(
         startId,
         () => levelStartId,

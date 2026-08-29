@@ -1,0 +1,573 @@
+:root {
+  --sky: #8bcaf1;
+  --parmesan: #f6d77d;
+  --cream: #fff5d6;
+  --marinara: #c94723;
+  --tomato: #d8381f;
+  --basil: #2f692f;
+  --espresso: #3a1c0f;
+  --espresso-soft: #603017;
+  --display: "Cooper Black", "Rockwell Extra Bold", Georgia, serif;
+  --body: "Avenir Next", "Trebuchet MS", sans-serif;
+  --utility: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  width: 100%;
+}
+
+body {
+  background: var(--espresso);
+  color: var(--espresso);
+  font-family: var(--body);
+}
+
+button {
+  font: inherit;
+}
+
+.mockup-screen {
+  height: 100vh;
+  min-height: 620px;
+  min-width: 1100px;
+  overflow: hidden;
+  position: relative;
+  width: 100vw;
+}
+
+.ui-button {
+  align-items: center;
+  background: linear-gradient(180deg, #fff9e4, var(--parmesan));
+  border: 3px solid var(--espresso);
+  border-radius: 18px;
+  box-shadow: 0 7px 0 var(--espresso), 0 14px 26px rgb(58 28 15 / 30%);
+  color: var(--espresso);
+  display: inline-flex;
+  font-size: 23px;
+  font-weight: 900;
+  justify-content: center;
+  letter-spacing: 0.015em;
+  min-height: 66px;
+  padding: 14px 42px;
+}
+
+.ui-button::after {
+  content: "›";
+  font-size: 34px;
+  line-height: 0;
+  margin-left: 18px;
+  transform: translateY(-1px);
+}
+
+.ui-button.secondary {
+  background: rgb(255 245 214 / 90%);
+  border-width: 2px;
+  box-shadow: 0 4px 0 var(--espresso);
+  font-size: 15px;
+  min-height: 42px;
+  padding: 9px 18px;
+}
+
+.ui-button.secondary::after {
+  content: none;
+}
+
+.utility-label {
+  font-family: var(--utility);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.title-mockup {
+  align-items: center;
+  background: url("assets/title-pasta-plains-v1.png") center center / cover no-repeat;
+  display: flex;
+  justify-content: center;
+}
+
+.title-mockup::before {
+  background:
+    linear-gradient(180deg, rgb(58 28 15 / 14%), transparent 26%, transparent 68%, rgb(58 28 15 / 34%)),
+    radial-gradient(circle at 50% 38%, rgb(255 255 255 / 12%), transparent 40%);
+  content: "";
+  inset: 0;
+  position: absolute;
+}
+
+.title-tools {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  left: 34px;
+  position: absolute;
+  right: 34px;
+  top: 26px;
+  z-index: 2;
+}
+
+.sound-control,
+.contribute-link {
+  align-items: center;
+  backdrop-filter: blur(9px);
+  background: rgb(255 245 214 / 82%);
+  border: 2px solid rgb(58 28 15 / 72%);
+  border-radius: 999px;
+  color: var(--espresso);
+  display: flex;
+  font-size: 14px;
+  font-weight: 850;
+  gap: 8px;
+  padding: 9px 14px;
+}
+
+.title-panel {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transform: translateY(-48px);
+  z-index: 1;
+}
+
+.title-logo-shell {
+  background: #100b06;
+  border: 3px solid var(--parmesan);
+  border-radius: 24px;
+  box-shadow: 0 10px 0 rgb(58 28 15 / 78%), 0 22px 48px rgb(58 28 15 / 35%);
+  height: 252px;
+  overflow: hidden;
+  padding: 12px 24px;
+  width: 414px;
+}
+
+.title-logo-shell img {
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.title-world {
+  align-items: center;
+  background: var(--basil);
+  border: 2px solid var(--cream);
+  border-radius: 999px;
+  box-shadow: 0 4px 0 var(--espresso);
+  color: var(--cream);
+  display: flex;
+  font-size: 16px;
+  font-weight: 900;
+  gap: 10px;
+  margin-top: -18px;
+  padding: 9px 20px;
+  position: relative;
+}
+
+.title-world span {
+  color: var(--parmesan);
+  font-family: var(--utility);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+
+.title-panel .ui-button {
+  margin-top: 30px;
+  min-width: 328px;
+}
+
+.control-hint {
+  align-items: center;
+  background: rgb(58 28 15 / 78%);
+  border: 1px solid rgb(255 245 214 / 48%);
+  border-radius: 999px;
+  color: var(--cream);
+  display: flex;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 10px;
+  margin-top: 25px;
+  padding: 8px 14px;
+}
+
+.control-hint kbd {
+  background: var(--cream);
+  border-radius: 6px;
+  color: var(--espresso);
+  font-family: var(--utility);
+  padding: 3px 7px;
+}
+
+.flow-mockup {
+  background: #d8873f;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 48% 52%;
+  padding: 14px;
+}
+
+.flow-panel {
+  border: 3px solid var(--espresso);
+  border-radius: 28px;
+  box-shadow: 0 8px 0 rgb(58 28 15 / 85%);
+  overflow: hidden;
+  position: relative;
+}
+
+.character-panel {
+  align-items: center;
+  background:
+    linear-gradient(135deg, rgb(201 71 35 / 5%) 25%, transparent 25%) 0 0 / 28px 28px,
+    var(--cream);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 44px 30px 34px;
+}
+
+.panel-step {
+  color: var(--marinara);
+  margin: 0 0 8px;
+}
+
+.character-panel h1,
+.map-heading h1 {
+  font-family: var(--display);
+  margin: 0;
+}
+
+.character-panel h1 {
+  font-size: clamp(34px, 3vw, 52px);
+}
+
+.shared-moves {
+  color: var(--espresso-soft);
+  font-size: 15px;
+  font-weight: 750;
+  margin: 8px 0 30px;
+}
+
+.chef-grid {
+  display: grid;
+  gap: 13px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+}
+
+.chef-card {
+  align-items: center;
+  background: #fffdf3;
+  border: 2px solid #b46c35;
+  border-radius: 22px;
+  box-shadow: 0 5px 0 #b46c35;
+  display: flex;
+  flex-direction: column;
+  min-height: 348px;
+  padding: 19px 10px 16px;
+  position: relative;
+}
+
+.chef-card.selected {
+  border: 4px solid var(--basil);
+  box-shadow: 0 6px 0 #173d19, 0 12px 22px rgb(47 105 47 / 18%);
+  transform: translateY(-5px);
+}
+
+.selected-badge {
+  background: var(--basil);
+  border-radius: 999px;
+  color: var(--cream);
+  font-family: var(--utility);
+  font-size: 10px;
+  font-weight: 900;
+  left: 50%;
+  letter-spacing: 0.08em;
+  padding: 6px 10px;
+  position: absolute;
+  top: -14px;
+  transform: translateX(-50%);
+}
+
+.chef-card img {
+  height: 220px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.chef-card h2 {
+  font-family: var(--display);
+  font-size: 23px;
+  margin: 7px 0 4px;
+}
+
+.chef-card p {
+  color: var(--espresso-soft);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 0;
+  max-width: 150px;
+  text-align: center;
+}
+
+.character-panel .ui-button {
+  font-size: 18px;
+  margin-top: 27px;
+  min-height: 54px;
+  min-width: 230px;
+  padding: 10px 28px;
+}
+
+.map-panel {
+  background: url("assets/world-map-pasta-plains-v1.png") center center / cover no-repeat;
+  color: var(--cream);
+}
+
+.map-panel::after {
+  background: linear-gradient(180deg, rgb(58 28 15 / 55%), transparent 22%, transparent 74%, rgb(58 28 15 / 58%));
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.map-heading {
+  left: 28px;
+  position: absolute;
+  text-shadow: 0 3px 9px rgb(58 28 15 / 85%);
+  top: 24px;
+  z-index: 2;
+}
+
+.map-heading .utility-label {
+  color: var(--parmesan);
+}
+
+.map-heading h1 {
+  font-size: clamp(34px, 3.3vw, 54px);
+}
+
+.map-lives {
+  align-items: center;
+  background: rgb(58 28 15 / 86%);
+  border: 2px solid var(--parmesan);
+  border-radius: 999px;
+  display: flex;
+  font-size: 17px;
+  font-weight: 900;
+  gap: 7px;
+  padding: 9px 14px;
+  position: absolute;
+  right: 24px;
+  top: 24px;
+  z-index: 2;
+}
+
+.map-node {
+  align-items: center;
+  background: linear-gradient(180deg, #fff9e4, var(--parmesan));
+  border: 4px solid var(--espresso);
+  border-radius: 50%;
+  box-shadow: 0 7px 0 var(--espresso), 0 14px 22px rgb(58 28 15 / 38%);
+  color: var(--espresso);
+  display: flex;
+  flex-direction: column;
+  height: 112px;
+  justify-content: center;
+  position: absolute;
+  width: 112px;
+  z-index: 2;
+}
+
+.map-node strong {
+  font-family: var(--display);
+  font-size: 28px;
+}
+
+.map-node small {
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.map-node.open {
+  bottom: 26%;
+  left: 22%;
+  outline: 5px solid var(--cream);
+  outline-offset: 5px;
+}
+
+.map-node.locked {
+  background: linear-gradient(180deg, #dad2ba, #9e927a);
+  bottom: 51%;
+  color: #4c4438;
+  right: 19%;
+}
+
+.map-node-label {
+  background: rgb(58 28 15 / 88%);
+  border: 1px solid rgb(255 245 214 / 42%);
+  border-radius: 11px;
+  color: var(--cream);
+  font-size: 12px;
+  font-weight: 850;
+  left: 50%;
+  padding: 7px 10px;
+  position: absolute;
+  top: calc(100% + 11px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.map-back {
+  bottom: 22px;
+  left: 24px;
+  position: absolute;
+  z-index: 2;
+}
+
+.gameplay-mockup {
+  background: url("assets/gameplay-pasta-plains-v1.png") center center / cover no-repeat;
+}
+
+.gameplay-mockup::after {
+  background: linear-gradient(180deg, rgb(51 83 93 / 12%), transparent 22%, transparent 78%, rgb(58 28 15 / 16%));
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.hud-level,
+.hud-status,
+.hud-help {
+  backdrop-filter: blur(8px);
+  background: rgb(58 28 15 / 88%);
+  border: 2px solid rgb(246 215 125 / 88%);
+  box-shadow: 0 7px 18px rgb(58 28 15 / 28%);
+  color: var(--cream);
+  position: absolute;
+  z-index: 3;
+}
+
+.hud-level {
+  border-radius: 17px;
+  left: 22px;
+  padding: 12px 16px;
+  top: 20px;
+}
+
+.hud-level .utility-label {
+  color: var(--parmesan);
+  font-size: 10px;
+}
+
+.hud-level strong {
+  display: block;
+  font-family: var(--display);
+  font-size: 22px;
+  margin-top: 2px;
+}
+
+.hud-status {
+  align-items: center;
+  border-radius: 999px;
+  display: flex;
+  font-size: 17px;
+  font-weight: 900;
+  gap: 13px;
+  padding: 9px 15px;
+  right: 22px;
+  top: 20px;
+}
+
+.hud-status .tomato-mini {
+  height: 26px;
+  object-fit: contain;
+  width: 26px;
+}
+
+.hud-divider {
+  background: rgb(255 245 214 / 28%);
+  height: 25px;
+  width: 1px;
+}
+
+.hud-help {
+  border: 1px solid rgb(246 215 125 / 58%);
+  border-radius: 999px;
+  bottom: 18px;
+  font-family: var(--utility);
+  font-size: 11px;
+  left: 20px;
+  padding: 8px 12px;
+}
+
+.chef-run-frame {
+  background-image: url("../../assets/characters/fatsio/run-sheet.png");
+  background-position: -150px 0;
+  background-repeat: no-repeat;
+  background-size: 750px 750px;
+  height: 150px;
+  left: 21%;
+  position: absolute;
+  top: 45.5%;
+  width: 150px;
+  z-index: 2;
+}
+
+.enemy-sprite {
+  height: 92px;
+  object-fit: contain;
+  position: absolute;
+  right: 10.5%;
+  top: 52.5%;
+  width: 92px;
+  z-index: 2;
+}
+
+.collectible {
+  height: 52px;
+  object-fit: contain;
+  position: absolute;
+  width: 52px;
+  z-index: 2;
+}
+
+.collectible.one {
+  left: 45%;
+  top: 48%;
+}
+
+.collectible.two {
+  left: 52.5%;
+  top: 38%;
+}
+
+.collectible.three {
+  left: 60%;
+  top: 47%;
+}
+
+@media (max-width: 1250px) {
+  .chef-card img {
+    height: 178px;
+  }
+
+  .chef-card {
+    min-height: 305px;
+  }
+
+  .chef-card h2 {
+    font-size: 19px;
+  }
+}
