@@ -82,7 +82,7 @@ async function startOneOne(page) {
   await expect(page.locator('#game-stage canvas')).toHaveCount(1);
 }
 
-test('landing reaches chef selection and shows both released worlds', async ({ page }) => {
+test('landing reaches chef selection and shows every planned world', async ({ page }) => {
   const diagnostics = await monitorPage(page);
 
   await page.goto('/');
@@ -93,7 +93,12 @@ test('landing reaches chef selection and shows both released worlds', async ({ p
   await expect(page.getByRole('region', { name: 'Chef party' })).toBeVisible();
   await expect(page.locator('.title-chef')).toHaveCount(3);
   await expect(page.getByRole('complementary', { name: 'Adventure board' })).toBeVisible();
-  await expect(page.locator('.title-world-card')).toHaveCount(2);
+  await expect(page.locator('.title-world-card')).toHaveCount(6);
+  await expect(page.locator('.title-world-card.unreleased.locked')).toHaveCount(4);
+  await expect(page.getByText('Taco Territory')).toBeVisible();
+  await expect(page.getByText('Curry Cliffs')).toBeVisible();
+  await expect(page.getByText('Dumpling Dynasty')).toBeVisible();
+  await expect(page.getByText('Dessert Dome')).toBeVisible();
   await expect(page.locator('.title-stat').first()).toContainText('0/12');
   await page.getByRole('button', { name: 'Continue adventure' }).click();
   await expect(page.getByRole('heading', { name: 'Who is cooking?' })).toBeVisible();

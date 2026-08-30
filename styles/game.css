@@ -930,9 +930,9 @@ h1.screen-title {
 
 .title-world-board {
   border-radius: 23px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  gap: 8px;
+  grid-template-rows: auto repeat(6, minmax(0, 1fr)) auto;
   min-height: 0;
   overflow: hidden;
   padding: 14px;
@@ -959,19 +959,19 @@ h1.screen-title {
 
 .title-world-card {
   border: 3px solid #b76d1b;
-  border-radius: 17px;
-  box-shadow: 0 5px 0 #80400f, 0 9px 16px rgb(88 37 9 / 18%);
-  flex: 1 1 0;
-  min-height: 100px;
+  border-radius: 14px;
+  box-shadow: 0 3px 0 #80400f, 0 7px 13px rgb(88 37 9 / 16%);
+  min-height: 0;
   overflow: hidden;
   position: relative;
 }
 
 .title-world-card::after {
-  background: linear-gradient(90deg, rgb(255 246 207 / 96%) 0 48%, rgb(255 246 207 / 15%) 76%);
+  background: linear-gradient(90deg, rgb(255 246 207 / 97%) 0 58%, rgb(255 246 207 / 18%) 86%);
   content: '';
   inset: 0;
   position: absolute;
+  z-index: 0;
 }
 
 .title-world-card img {
@@ -997,13 +997,14 @@ h1.screen-title {
   color: #fff9df;
   display: flex;
   font-family: var(--display);
-  font-size: 25px;
-  height: 46px;
+  font-size: clamp(17px, 1.4vw, 22px);
+  height: clamp(34px, 3.4vw, 42px);
   justify-content: center;
-  left: 12px;
+  left: 10px;
   text-shadow: 0 2px 0 #235414;
-  top: 12px;
-  width: 46px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: clamp(34px, 3.4vw, 42px);
 }
 
 .sushi-card {
@@ -1017,35 +1018,81 @@ h1.screen-title {
   text-shadow: 0 2px 0 #0d5072;
 }
 
+.taco-card {
+  border-color: #805286;
+  box-shadow: 0 3px 0 #56345c, 0 7px 13px rgb(86 52 92 / 18%);
+}
+
+.taco-card .title-world-number {
+  background: linear-gradient(180deg, #a46cad, #724377);
+  border-color: #56345c;
+  text-shadow: 0 2px 0 #56345c;
+}
+
+.curry-card {
+  border-color: #c87518;
+  box-shadow: 0 3px 0 #8a4b0e, 0 7px 13px rgb(138 75 14 / 18%);
+}
+
+.curry-card .title-world-number {
+  background: linear-gradient(180deg, #eca33d, #c36a13);
+  border-color: #8a4b0e;
+  text-shadow: 0 2px 0 #8a4b0e;
+}
+
+.dumpling-card {
+  border-color: #b04d40;
+  box-shadow: 0 3px 0 #763027, 0 7px 13px rgb(118 48 39 / 18%);
+}
+
+.dumpling-card .title-world-number {
+  background: linear-gradient(180deg, #d86d5e, #a83f34);
+  border-color: #763027;
+  text-shadow: 0 2px 0 #763027;
+}
+
+.dessert-card {
+  border-color: #248793;
+  box-shadow: 0 3px 0 #175d65, 0 7px 13px rgb(23 93 101 / 18%);
+}
+
+.dessert-card .title-world-number {
+  background: linear-gradient(180deg, #51b8c2, #23818c);
+  border-color: #175d65;
+  text-shadow: 0 2px 0 #175d65;
+}
+
 .title-world-copy {
   display: flex;
   flex-direction: column;
-  left: 68px;
-  max-width: 190px;
-  top: 14px;
+  left: clamp(54px, 4.7vw, 64px);
+  max-width: 210px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .title-world-copy strong {
   color: #54240f;
   font-family: var(--display);
-  font-size: clamp(18px, 1.4vw, 23px);
+  font-size: clamp(15px, 1.25vw, 20px);
   line-height: 1;
 }
 
 .title-world-copy span {
   color: #7f3f1b;
-  font-size: 11px;
+  font-size: 9px;
   font-style: italic;
   font-weight: 800;
   margin-top: 4px;
 }
 
 .title-world-rating {
-  bottom: 12px;
+  bottom: 8px;
   color: #87500e;
-  font-size: 12px;
+  font-size: 9px;
   font-weight: 900;
-  left: 16px;
+  left: auto;
+  right: 10px;
   text-transform: uppercase;
 }
 
@@ -1053,41 +1100,17 @@ h1.screen-title {
   filter: saturate(0.72);
 }
 
+.title-world-card.unreleased {
+  filter: grayscale(0.82) saturate(0.38) brightness(0.9);
+  opacity: 0.76;
+}
+
 .title-world-card.locked::before {
   background: rgb(72 41 23 / 22%);
   content: '';
   inset: 0;
   position: absolute;
-  z-index: 3;
-}
-
-.title-future-card {
-  align-items: center;
-  background: rgb(133 82 39 / 12%);
-  border: 2px dashed rgb(127 67 24 / 44%);
-  border-radius: 14px;
-  color: #6b391e;
-  display: flex;
-  flex: 0 0 auto;
-  gap: 10px;
-  padding: 9px 12px;
-}
-
-.title-future-card > span {
-  font-size: 21px;
-}
-
-.title-future-card div {
-  display: flex;
-  flex-direction: column;
-}
-
-.title-future-card strong {
-  font-size: 12px;
-}
-
-.title-future-card small {
-  font-size: 9px;
+  z-index: 1;
 }
 
 .title-contribute {
@@ -1479,20 +1502,29 @@ h1.screen-title {
   }
 
   .title-world-board {
-    gap: 7px;
-    padding: 10px;
+    gap: 5px;
+    padding: 8px;
   }
 
   .title-board-heading h2 {
-    font-size: 23px;
+    font-size: 21px;
   }
 
   .title-world-card {
-    min-height: 94px;
+    min-height: 0;
   }
 
-  .title-future-card {
-    padding: 6px 10px;
+  .title-world-copy strong {
+    font-size: 14px;
+  }
+
+  .title-world-copy span,
+  .title-world-rating {
+    font-size: 8px;
+  }
+
+  .title-contribute {
+    font-size: 8px;
   }
 
   #char-screen {

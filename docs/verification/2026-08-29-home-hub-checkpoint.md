@@ -1,6 +1,7 @@
 # Home hub visual checkpoint
 
 Date: 2026-08-29
+Last updated: 2026-08-30
 
 ## Scope
 
@@ -8,7 +9,8 @@ Date: 2026-08-29
 - Kept Chefno, Fatsio, and Dinnerette on their original static artwork.
 - Added one clear Continue adventure action.
 - Added real star, course, world, and next-course progress from the saved game.
-- Kept unreleased worlds out of the destination list.
+- Shows all six planned worlds in the destination list.
+- Keeps Worlds 3 through 6 greyed out and locked.
 - Added a generated kingdom panorama connecting Pasta Plains and Sushi Shores.
 
 ## Visual review
