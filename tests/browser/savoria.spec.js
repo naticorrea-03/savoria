@@ -126,19 +126,19 @@ test('1-1 pauses, resumes with Space, and replaces its canvas on restart', async
   const diagnostics = await monitorPage(page);
 
   await startOneOne(page);
-  const timerBeforePause = await page.locator('#timer-text').textContent();
 
   await page.keyboard.press('Escape');
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'paused');
   await expect(page.getByRole('dialog', { name: 'Paused' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Resume' })).toBeFocused();
   await expect(page.locator('#game-stage canvas')).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => window.__savoriaTest.session?.running)).toBe(false);
 
   await page.keyboard.press('Space');
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'playing');
   await expect(page.locator('#game-stage')).toBeFocused();
   await expect(page.locator('#game-stage canvas')).toBeVisible();
-  await expect.poll(async () => page.locator('#timer-text').textContent()).not.toBe(timerBeforePause);
+  await expect.poll(() => page.evaluate(() => window.__savoriaTest.session?.running)).toBe(true);
 
   const firstCanvas = await page.locator('#game-stage canvas').elementHandle();
   expect(firstCanvas).not.toBeNull();
