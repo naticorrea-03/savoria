@@ -2,6 +2,8 @@
 
 Savoria is a desktop food platformer. Choose a chef, cross Pasta Plains and Sushi Shores, collect tomatoes, and clear four hand-built courses.
 
+The playable home hub shows real save progress, the unchanged chef party, and both released worlds.
+
 ## Play
 
 The game route is [`/play/`](./play/). It is not hosted or published from this repository yet. Run it locally first:

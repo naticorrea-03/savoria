@@ -70,7 +70,7 @@ async function waitForTitle(page) {
 async function openWorldOne(page) {
   await page.goto('/play/');
   await waitForTitle(page);
-  await page.getByRole('button', { name: 'Play' }).click();
+  await page.getByRole('button', { name: 'Continue adventure' }).click();
   await page.getByRole('button', { name: /^Fatsio/ }).click();
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'world');
 }
@@ -90,7 +90,12 @@ test('landing reaches chef selection and shows both released worlds', async ({ p
   await page.getByRole('link', { name: 'Play Savoria' }).click();
   await expect(page).toHaveURL(/\/play\/$/);
   await waitForTitle(page);
-  await page.getByRole('button', { name: 'Play' }).click();
+  await expect(page.getByRole('region', { name: 'Chef party' })).toBeVisible();
+  await expect(page.locator('.title-chef')).toHaveCount(3);
+  await expect(page.getByRole('complementary', { name: 'Adventure board' })).toBeVisible();
+  await expect(page.locator('.title-world-card')).toHaveCount(2);
+  await expect(page.locator('.title-stat').first()).toContainText('0/12');
+  await page.getByRole('button', { name: 'Continue adventure' }).click();
   await expect(page.getByRole('heading', { name: 'Who is cooking?' })).toBeVisible();
   await expect(page.getByText('Every chef shares the same moves. Pick your favorite.')).toBeVisible();
   await expect(page.locator('#char-cards button')).toHaveCount(3);
@@ -107,7 +112,7 @@ test('landing reaches chef selection and shows both released worlds', async ({ p
 
   await page.reload();
   await waitForTitle(page);
-  await page.getByRole('button', { name: 'Play' }).click();
+  await page.getByRole('button', { name: 'Continue adventure' }).click();
   await expect(page.getByRole('button', { name: /^Dinnerette/ })).toHaveAttribute('aria-pressed', 'true');
   await expectClean(page, diagnostics);
 });
@@ -263,7 +268,7 @@ test('production progression unlocks, completes, and resumes 1-2', async ({ page
 
   await page.reload();
   await waitForTitle(page);
-  await page.getByRole('button', { name: 'Play' }).click();
+  await page.getByRole('button', { name: 'Continue adventure' }).click();
   await page.getByRole('button', { name: /^Fatsio/ }).click();
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'world');
   const penneRidge = page.getByRole('button', { name: /1-2 Penne Ridge/ });
@@ -300,7 +305,7 @@ test('production progression unlocks, completes, and resumes 1-2', async ({ page
 
   await page.reload();
   await waitForTitle(page);
-  await page.getByRole('button', { name: 'Play' }).click();
+  await page.getByRole('button', { name: 'Continue adventure' }).click();
   await page.getByRole('button', { name: /^Fatsio/ }).click();
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'world');
   await expect(page.getByRole('button', { name: /1-2 Penne Ridge, 2 of 3 stars/ })).toBeEnabled();
@@ -323,7 +328,7 @@ test('Sushi Shores loads themed art, unlocks 2-2, completes, and resumes', async
   });
   await page.reload();
   await waitForTitle(page);
-  await page.getByRole('button', { name: 'Play' }).click();
+  await page.getByRole('button', { name: 'Continue adventure' }).click();
   await page.getByRole('button', { name: /^Dinnerette/ }).click();
   await page.evaluate(() => performance.clearResourceTimings());
 
@@ -367,7 +372,7 @@ test('Sushi Shores loads themed art, unlocks 2-2, completes, and resumes', async
 
   await page.reload();
   await waitForTitle(page);
-  await page.getByRole('button', { name: 'Play' }).click();
+  await page.getByRole('button', { name: 'Continue adventure' }).click();
   await page.getByRole('button', { name: /^Dinnerette/ }).click();
   await page.getByRole('button', { name: /2-2 Wasabi Falls/ }).click();
   await expect(page.locator('#hlp-num')).toHaveText('2-2');
@@ -381,7 +386,7 @@ test('Sushi Shores loads themed art, unlocks 2-2, completes, and resumes', async
 
   await page.reload();
   await waitForTitle(page);
-  await page.getByRole('button', { name: 'Play' }).click();
+  await page.getByRole('button', { name: 'Continue adventure' }).click();
   await page.getByRole('button', { name: /^Dinnerette/ }).click();
   await expect(page.getByRole('button', { name: /2-2 Wasabi Falls, 2 of 3 stars/ })).toBeEnabled();
   await expectClean(page, diagnostics);

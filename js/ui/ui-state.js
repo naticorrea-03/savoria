@@ -24,6 +24,37 @@ export const CHARACTERS = [
 
 const RELEASED_IDS = new Set(RELEASED_LEVELS.map(({ id }) => id));
 
+export function titleProgressFor(save = createFreshSave()) {
+  const best = save.best ?? {};
+  const completedCourses = RELEASED_LEVELS.filter(({ id }) => best[id] !== undefined).length;
+  const totalStars = Object.values(best).reduce(
+    (total, stars) => total + (Number(stars) || 0),
+    0,
+  );
+  const worldStars = Object.fromEntries(RELEASED_WORLDS.map(({ n }) => [
+    n,
+    RELEASED_LEVELS
+      .filter(({ world }) => world === n)
+      .reduce((total, { id }) => total + (best[id] ?? 0), 0),
+  ]));
+  const openCount = Math.max(
+    1,
+    Math.min(RELEASED_LEVELS.length, Number(save.unlocked) || 1),
+  );
+  const current = RELEASED_LEVELS.find(
+    ({ id }, index) => index < openCount && best[id] === undefined,
+  ) ?? RELEASED_LEVELS[openCount - 1];
+
+  return {
+    completedCourses,
+    currentLevelId: current.id,
+    currentLevelName: current.name,
+    currentWorld: current.world,
+    totalStars,
+    worldStars,
+  };
+}
+
 function completionState(levelId) {
   const index = RELEASED_LEVELS.findIndex(({ id }) => id === levelId);
   const level = RELEASED_LEVELS[index];
@@ -265,6 +296,39 @@ function renderCharacters(doc, state) {
   )));
 }
 
+function renderTitleHub(doc, state) {
+  const progress = titleProgressFor(state.save);
+  const world = RELEASED_WORLDS.find(({ n }) => n === progress.currentWorld);
+  const courseStars = state.save.best[progress.currentLevelId] ?? 0;
+  const sushiOpen = state.save.unlocked >= 3;
+
+  const copy = {
+    'title-total-stars': `${progress.totalStars}/12`,
+    'title-completed-courses': `${progress.completedCourses}/4`,
+    'title-current-world': `World ${progress.currentWorld} · ${world?.name ?? 'Savoria'}`,
+    'title-current-course': `${progress.currentLevelId} ${progress.currentLevelName}`,
+    'title-world-one-stars': `${progress.worldStars[1]}/6 stars`,
+    'title-world-two-stars': sushiOpen ? `${progress.worldStars[2]}/6 stars` : 'Locked',
+  };
+  for (const [id, text] of Object.entries(copy)) {
+    const element = doc.getElementById(id);
+    if (element) element.textContent = text;
+  }
+
+  const stars = doc.getElementById('title-current-stars');
+  if (stars) {
+    stars.textContent = `${'★'.repeat(courseStars)}${'☆'.repeat(3 - courseStars)}`;
+    stars.setAttribute('aria-label', `${courseStars} of 3 course stars`);
+  }
+
+  doc.querySelector('[data-world="2"]')?.classList.toggle('locked', !sushiOpen);
+  for (const chef of doc.querySelectorAll('.title-chef')) {
+    const selected = chef.dataset.characterId === state.save.chef;
+    chef.classList.toggle('is-selected', selected);
+    chef.setAttribute('aria-current', selected ? 'true' : 'false');
+  }
+}
+
 function makeLevelButton(doc, level, index, state) {
   const open = index < state.save.unlocked;
   const stars = state.save.best[level.id] ?? 0;
@@ -435,6 +499,7 @@ export function renderUi(state, { doc = document, previousScreen = lastRenderedS
     setVisible(doc.getElementById(id), screenIds[state.screen] === id);
   }
 
+  renderTitleHub(doc, state);
   renderCharacters(doc, state);
   renderWorld(doc, state);
   renderCompletion(doc, state.completion);

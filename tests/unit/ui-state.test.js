@@ -8,6 +8,7 @@ import {
   createWebGLCapabilityProbe,
   initialUiState,
   reduceUiState,
+  titleProgressFor,
 } from '../../js/ui/ui-state.js';
 
 test('character selection uses static portrait artwork', () => {
@@ -19,6 +20,23 @@ test('character selection uses static portrait artwork', () => {
       'assets/sprites/chefno.png',
     ],
   );
+});
+
+test('title hub reports real save progress and the next playable course', () => {
+  assert.deepEqual(titleProgressFor({
+    version: 4,
+    unlocked: 4,
+    best: { '1-1': 3, '1-2': 2, '2-1': 1 },
+    chef: 'dinnerette',
+    sound: false,
+  }), {
+    completedCourses: 3,
+    currentLevelId: '2-2',
+    currentLevelName: 'Wasabi Falls',
+    currentWorld: 2,
+    totalStars: 6,
+    worldStars: { 1: 5, 2: 1 },
+  });
 });
 
 test('the release flow exposes the approved screen states', () => {
