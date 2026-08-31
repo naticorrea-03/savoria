@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 
 const ONLINE_ORIGIN = 'http://127.0.0.1:2567';
 const PRODUCTION_ORIGIN = 'http://127.0.0.1:8978';
@@ -11,9 +13,15 @@ test('production mode excludes browser test mutation hooks', async ({ page }) =>
       control: typeof multiplayer.control,
       drop: typeof multiplayer.drop,
       reconnect: typeof multiplayer.reconnect,
+      disableReconnection: typeof multiplayer.disableReconnection,
     };
   });
-  expect(hooks).toEqual({ control: 'undefined', drop: 'undefined', reconnect: 'undefined' });
+  expect(hooks).toEqual({
+    control: 'undefined',
+    drop: 'undefined',
+    reconnect: 'undefined',
+    disableReconnection: 'undefined',
+  });
 });
 
 test('invite links open accessible online controls while solo stays network-free', async ({ page }) => {
@@ -459,6 +467,60 @@ test('two browser contexts enter every released course through the production lo
   }
 });
 
+test('forced standalone server shutdown returns both browser contexts to expired-room recovery', async ({ browser }) => {
+  const standalone = await startStandaloneServer();
+  const hostContext = await browser.newContext();
+  const guestContext = await browser.newContext();
+  const host = await hostContext.newPage();
+  const guest = await guestContext.newPage();
+  const consoleErrors = [];
+  for (const [label, page] of [['host', host], ['guest', guest]]) {
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(`${label}: ${message.text()}`);
+    });
+    page.on('pageerror', (error) => consoleErrors.push(`${label}: ${error.message}`));
+  }
+
+  try {
+    await host.goto(`${standalone.origin}/play/`);
+    await host.getByRole('button', { name: 'Online Co-op' }).click();
+    await host.getByRole('button', { name: 'Create room' }).click();
+    await expect(host.locator('#app')).toHaveAttribute('data-screen', 'lobby');
+    const roomCode = await host.locator('#lobby-room-code').textContent();
+    await guest.goto(`${standalone.origin}/play/?room=${roomCode}`);
+    await guest.getByLabel('Guest name').fill('Shutdown guest');
+    await guest.getByRole('button', { name: 'Join room' }).click();
+
+    for (const page of [host, guest]) {
+      await expect(page.locator('#app')).toHaveAttribute('data-screen', 'lobby');
+      await expect(page.locator('.lobby-player')).toHaveCount(2);
+    }
+    expect(await host.locator('#lobby-room-code').textContent()).toBe(roomCode);
+    expect(await guest.locator('#lobby-room-code').textContent()).toBe(roomCode);
+
+    await Promise.all([host, guest].map((page) => page.evaluate(() => {
+      window.__savoriaTest.multiplayer.disableReconnection();
+    })));
+    standalone.child.kill('SIGKILL');
+    const [, signal] = await standalone.exit;
+    expect(signal).toBe('SIGKILL');
+    for (const page of [host, guest]) {
+      await expect(page.locator('#app')).toHaveAttribute('data-screen', 'online');
+      await expect(page.getByRole('status')).toContainText('That room expired');
+      await expect(page.getByRole('button', { name: 'Create room' })).toBeEnabled();
+    }
+    expect(consoleErrors).toEqual([]);
+  } finally {
+    await hostContext.close();
+    await guestContext.close();
+    if (standalone.child.exitCode === null) standalone.child.kill('SIGKILL');
+    await Promise.race([
+      standalone.exit,
+      new Promise((resolve) => setTimeout(resolve, 1_000)),
+    ]);
+  }
+});
+
 test('guest Escape leaves without pausing, then either chef can fail the recovered team', async ({ browser }) => {
   const hostContext = await browser.newContext();
   const guestContext = await browser.newContext();
@@ -528,3 +590,34 @@ test('guest Escape leaves without pausing, then either chef can fail the recover
     await guestContext.close();
   }
 });
+
+async function startStandaloneServer() {
+  const child = spawn(process.execPath, ['tests/browser/standalone-server.js'], {
+    cwd: process.cwd(),
+    env: { ...process.env, SAVORIA_BROWSER_TESTS: '1' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const exit = once(child, 'exit');
+  const errors = [];
+  child.stderr.on('data', (chunk) => errors.push(chunk.toString()));
+  const origin = await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error(
+      `Standalone server did not report a port: ${errors.join('').trim()}`,
+    )), 10_000);
+    child.stdout.on('data', (chunk) => {
+      const match = chunk.toString().match(/SAVORIA_TEST_ORIGIN=(http:\/\/127\.0\.0\.1:\d+)/);
+      if (!match) return;
+      clearTimeout(timeout);
+      resolve(match[1]);
+    });
+    child.once('error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    exit.then(([code, signal]) => {
+      clearTimeout(timeout);
+      reject(new Error(`Standalone server exited before ready (${code ?? signal}): ${errors.join('').trim()}`));
+    });
+  });
+  return { child, exit, origin };
+}

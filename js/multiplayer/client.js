@@ -8,6 +8,10 @@ import { playerMarkerColor } from './identity.js';
 import { normalizeRoomCode } from './invite.js';
 import { isBrowserTestMode } from './browser-test-mode.js';
 
+export const RECONNECTION_MAX_RETRIES = 6;
+export const RECONNECTION_DELAY_MS = 100;
+export const RECONNECTION_MAX_DELAY_MS = 1_000;
+
 export class MultiplayerClient {
   constructor({
     endpoint = multiplayerEndpoint(globalThis.location),
@@ -101,7 +105,13 @@ export class MultiplayerClient {
 
   bindRoom(room) {
     this.room = room;
-    if (room.reconnection) room.reconnection.minUptime = 0;
+    if (room.reconnection) {
+      room.reconnection.minUptime = 0;
+      room.reconnection.maxRetries = RECONNECTION_MAX_RETRIES;
+      room.reconnection.delay = RECONNECTION_DELAY_MS;
+      room.reconnection.minDelay = RECONNECTION_DELAY_MS;
+      room.reconnection.maxDelay = RECONNECTION_MAX_DELAY_MS;
+    }
     room.onStateChange((state) => this.onState(toLobbyView(state, room.sessionId)));
     room.onDrop(() => {
       this.resetNetcode('drop');
@@ -153,6 +163,11 @@ function attachBrowserTestControls(client) {
         this.resetNetcode('reconnect');
         room.send(MESSAGE.RECONNECT, { protocolVersion: PROTOCOL_VERSION });
         this.onStatus({ kind: 'connected', message: 'Back in the room.' });
+      },
+    },
+    disableReconnectionForTest: {
+      value() {
+        if (this.room?.reconnection) this.room.reconnection.enabled = false;
       },
     },
   });

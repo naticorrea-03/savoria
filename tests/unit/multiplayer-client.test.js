@@ -4,6 +4,9 @@ import { MESSAGE, PROTOCOL_VERSION, ROOM_NAME } from '../../js/multiplayer/proto
 import {
   MultiplayerClient,
   multiplayerEndpoint,
+  RECONNECTION_DELAY_MS,
+  RECONNECTION_MAX_DELAY_MS,
+  RECONNECTION_MAX_RETRIES,
   toLobbyView,
 } from '../../js/multiplayer/client.js';
 
@@ -55,6 +58,10 @@ test('online SDK is lazy and create sends protocol and local identity', async ()
 
   assert.equal(loads, 1);
   assert.equal(room.reconnection.minUptime, 0);
+  assert.equal(room.reconnection.maxRetries, RECONNECTION_MAX_RETRIES);
+  assert.equal(room.reconnection.delay, RECONNECTION_DELAY_MS);
+  assert.equal(room.reconnection.minDelay, RECONNECTION_DELAY_MS);
+  assert.equal(room.reconnection.maxDelay, RECONNECTION_MAX_DELAY_MS);
   assert.deepEqual(calls, [
     ['endpoint', 'ws://127.0.0.1:2567'],
     ['create', ROOM_NAME, {
@@ -167,6 +174,8 @@ test('host pause and browser controls stay outside the four-field input payload'
 
     client.pause();
     client.testControl({ action: 'goal', playerId: 'session-host' });
+    client.disableReconnectionForTest();
+    assert.equal(room.reconnection.enabled, false);
     client.dropForTest();
     room.onDrop.emit();
     await client.reconnectForTest();
@@ -196,6 +205,7 @@ test('production client instances do not surface browser test mutation methods',
     assert.equal(client.testControl, undefined);
     assert.equal(client.dropForTest, undefined);
     assert.equal(client.reconnectForTest, undefined);
+    assert.equal(client.disableReconnectionForTest, undefined);
   } finally {
     globalThis.__SAVORIA_BROWSER_TESTS__ = previousTestMode;
   }
