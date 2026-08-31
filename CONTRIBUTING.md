@@ -82,6 +82,8 @@ Future courses are welcome. Propose the course before adding it to the released 
 
 Use the pull request template. Include the command output, a browser screenshot, and the scope of the change. Do not copy Nintendo artwork, audio, characters, branding, or level layouts.
 
+A maintainer must approve every pull request before it merges. For a suspected vulnerability, use [GitHub private reporting](https://github.com/naticorrea-03/savoria/security/advisories/new). Do not open a public issue.
+
 By submitting a pull request, you represent that you have authority to contribute its contents. You license contributed code under the [MIT License](./LICENSE). You license accepted original images and synthesized audio under [CC BY-NC 4.0](./ASSET-LICENSE.md). Trademark submissions are not accepted through this contribution process, including the Savoria name, wordmark, and logo.
 
 This is a project licensing choice, not legal advice.
