@@ -1,6 +1,7 @@
 import * as THREE from '../../vendor/three.module.js';
 import { AABB } from '../core/aabb.js';
 import { sfx } from '../audio/sfx.js';
+import { nextSeededRandom, seedToUint32 } from './seeded-random.js';
 
 const SPRITES = {
   meatball: 'assets/sprites/meatball_walker.png',
@@ -20,6 +21,9 @@ function makeSprite(textures, path, width, height) {
 }
 
 export function spawnEnemy(context, enemy) {
+  if (!Number.isInteger(context.randomState)) {
+    context.randomState = seedToUint32(`${enemy.t}:${enemy.p.join(',')}:${enemy.range ?? 5}`);
+  }
   const size = enemy.t === 'meatball' ? 1.5 : enemy.t === 'flyer' ? 1.4 : 1.7;
   const path = context.level?.theme?.visuals?.sprites?.[enemy.t] ?? SPRITES[enemy.t];
   const sprite = makeSprite(context.textures, path, size, size);
@@ -30,7 +34,7 @@ export function spawnEnemy(context, enemy) {
     sprite,
     base: [...enemy.p],
     range: Math.max(1.5, enemy.range || 5),
-    t0: Math.random() * 6,
+    t0: nextSeededRandom(context) * 6,
     dead: false,
     size,
     shootT: 1.5,

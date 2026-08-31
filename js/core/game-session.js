@@ -10,8 +10,8 @@ import { InputState } from '../gameplay/input-state.js';
 import {
   DEFAULT_MOTION,
   createPlayerMotion,
-  stepPlayerMotion,
 } from '../gameplay/player-motion.js';
+import { applyPlayerInput } from '../gameplay/player-state.js';
 
 export const INITIAL_HEARTS = 3;
 const MAX_HEARTS = 5;
@@ -91,6 +91,7 @@ export class GameSession {
     this.checkpointFlag = this.sceneState.checkpointFlag;
     this.goalObject = this.sceneState.goalObject;
     this.bossState = this.sceneState.bossState;
+    this.randomState = this.sceneState.randomState;
     this.sun = this.sceneState.sun;
 
     this.input = new InputState();
@@ -255,7 +256,7 @@ export class GameSession {
     const jumpSpeed = DEFAULT_MOTION.jumpSpeed
       * (this.power?.type === 'boost' ? 1.28 : 1);
     const speedMultiplier = this.power?.type === 'speed' ? 1.55 : 1;
-    const next = stepPlayerMotion(
+    const next = applyPlayerInput(
       motion,
       {
         axis: this.input.axis,
@@ -263,13 +264,15 @@ export class GameSession {
         jumpPressed: hadJumpBuffer,
         jumpHeld: this.input.jumpHeld,
       },
-      { solids: this.solids },
-      dt,
       {
-        walkSpeed: DEFAULT_MOTION.walkSpeed * speedMultiplier,
-        runSpeed: DEFAULT_MOTION.runSpeed * speedMultiplier,
-        jumpSpeed,
+        solids: this.solids,
+        motion: {
+          walkSpeed: DEFAULT_MOTION.walkSpeed * speedMultiplier,
+          runSpeed: DEFAULT_MOTION.runSpeed * speedMultiplier,
+          jumpSpeed,
+        },
       },
+      dt,
     );
     const jumped = next.velocityY > motion.velocityY
       && next.velocityY > DEFAULT_MOTION.jumpCutSpeed;
