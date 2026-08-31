@@ -8,6 +8,7 @@ import {
   createWebGLCapabilityProbe,
   initialUiState,
   reduceUiState,
+  titleProgressFor,
 } from '../../js/ui/ui-state.js';
 
 test('character selection uses static portrait artwork', () => {
@@ -19,6 +20,23 @@ test('character selection uses static portrait artwork', () => {
       'assets/sprites/chefno.png',
     ],
   );
+});
+
+test('title hub reports real save progress and the next playable course', () => {
+  assert.deepEqual(titleProgressFor({
+    version: 4,
+    unlocked: 4,
+    best: { '1-1': 3, '1-2': 2, '2-1': 1 },
+    chef: 'dinnerette',
+    sound: false,
+  }), {
+    completedCourses: 3,
+    currentLevelId: '2-2',
+    currentLevelName: 'Wasabi Falls',
+    currentWorld: 2,
+    totalStars: 6,
+    worldStars: { 1: 5, 2: 1 },
+  });
 });
 
 test('the release flow exposes the approved screen states', () => {
@@ -64,8 +82,11 @@ test('course completion unlocks 1-2 and returns to the World 1 map', () => {
   assert.equal(world.screen, 'world');
 });
 
-test('finishing 1-2 enters the World 1 completion state', () => {
-  const next = reduceUiState(initialUiState(), {
+test('finishing 1-2 completes World 1 and unlocks Sushi Shores', () => {
+  const state = initialUiState({
+    save: { ...initialUiState().save, unlocked: 2 },
+  });
+  const next = reduceUiState(state, {
     type: 'COURSE_COMPLETE',
     levelId: '1-2',
     stars: 3,
@@ -73,7 +94,26 @@ test('finishing 1-2 enters the World 1 completion state', () => {
   });
   assert.equal(next.screen, 'complete');
   assert.equal(next.completion.worldComplete, true);
+  assert.equal(next.completion.worldNumber, 1);
+  assert.equal(next.save.unlocked, 3);
   assert.equal(next.save.best['1-2'], 3);
+});
+
+test('finishing 2-2 enters the Sushi Shores completion state', () => {
+  const state = initialUiState({
+    save: { ...initialUiState().save, unlocked: 4 },
+  });
+  const next = reduceUiState(state, {
+    type: 'COURSE_COMPLETE',
+    levelId: '2-2',
+    stars: 3,
+    stats: { coins: 12, totalCoins: 12, time: 96 },
+  });
+  assert.equal(next.screen, 'complete');
+  assert.equal(next.completion.worldComplete, true);
+  assert.equal(next.completion.worldNumber, 2);
+  assert.equal(next.save.unlocked, 4);
+  assert.equal(next.save.best['2-2'], 3);
 });
 
 test('asset failure enters a retryable error state', () => {
@@ -123,6 +163,13 @@ test('locked or unknown courses cannot enter loading', () => {
   assert.equal(
     reduceUiState(initial, { type: 'SELECT_LEVEL', levelId: '2-1', levelIndex: 2 }),
     initial,
+  );
+  const worldTwoOpen = initialUiState({
+    save: { ...initial.save, unlocked: 3 },
+  });
+  assert.equal(
+    reduceUiState(worldTwoOpen, { type: 'SELECT_LEVEL', levelId: '2-1', levelIndex: 2 }).screen,
+    'loading',
   );
 });
 

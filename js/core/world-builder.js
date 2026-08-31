@@ -1,22 +1,20 @@
 import { AABB } from './aabb.js';
 import { spawnEnemy } from '../gameplay/entities.js';
+import { WORLD_ONE_VISUALS } from '../visuals/world-one-manifest.js';
 import {
-  WORLD_ONE_VISUALS,
-  collectWorldOneAssets,
+  collectVisualAssets,
   decorationSlotsFor,
   terrainVisualFor,
-} from '../visuals/world-one-manifest.js';
+} from '../visuals/manifest-utils.js';
 
-const SPRITES = WORLD_ONE_VISUALS.sprites;
-
-export const WORLD_ONE_ASSETS = collectWorldOneAssets();
+export const WORLD_ONE_ASSETS = collectVisualAssets(WORLD_ONE_VISUALS);
 
 export function backgroundLayerX(cameraX, layers = WORLD_ONE_VISUALS.backgrounds) {
   return layers.map(({ parallax }) => Number((cameraX * parallax).toFixed(6)));
 }
 
-export function terrainPlaneZ(_collisionDepth, offset = 0) {
-  return WORLD_ONE_VISUALS.plane.gameplayZ + offset;
+export function terrainPlaneZ(_collisionDepth, offset = 0, manifest = WORLD_ONE_VISUALS) {
+  return manifest.plane.gameplayZ + offset;
 }
 
 export function fitVisualUv(uv, sourceAspect, width, height) {
@@ -36,6 +34,7 @@ export function mergeGroundVisualRuns(boxes) {
     if (!['ground', 'ground2'].includes(kind)) continue;
     const previous = runs.at(-1);
     const touchesPrevious = previous
+      && previous[6] === kind
       && Math.abs(previous[0] + previous[3] / 2 - (x - w / 2)) < 1e-4
       && previous[1] === y
       && previous[2] === z
@@ -47,7 +46,7 @@ export function mergeGroundVisualRuns(boxes) {
       previous[0] = (left + right) / 2;
       previous[3] = right - left;
     } else {
-      runs.push([x, y, z, w, h, d, 'ground']);
+      runs.push([x, y, z, w, h, d, kind]);
     }
   }
   return runs;
@@ -128,8 +127,8 @@ function createWorldTools(THREE) {
     });
   }
 
-  function addTerrainVisual(mesh, textures, kind, w, h, d) {
-    const visual = terrainVisualFor(kind);
+  function addTerrainVisual(mesh, textures, kind, w, h, d, manifest) {
+    const visual = terrainVisualFor(kind, manifest);
     const isPlatform = kind === 'plat' || kind === 'brick';
     const faceHeight = isPlatform ? Math.max(0.9, h) : h;
     const visualWidth = w;
@@ -151,7 +150,7 @@ function createWorldTools(THREE) {
         worldLeft,
       }),
     );
-    face.position.set(0, h / 2 - faceHeight / 2, terrainPlaneZ(d, visual.faceDepth));
+    face.position.set(0, h / 2 - faceHeight / 2, terrainPlaneZ(d, visual.faceDepth, manifest));
     mesh.add(face);
 
     if (visual.skirtDepth) {
@@ -167,7 +166,7 @@ function createWorldTools(THREE) {
       skirt.position.set(
         0,
         -h / 2 - visual.skirtDepth / 2,
-        terrainPlaneZ(d, visual.faceDepth - 0.01),
+        terrainPlaneZ(d, visual.faceDepth - 0.01, manifest),
       );
       mesh.add(skirt);
     }
@@ -180,7 +179,7 @@ function createWorldTools(THREE) {
       cap.position.set(
         0,
         h / 2 - visual.capDepth / 2,
-        terrainPlaneZ(d, visual.faceDepth + 0.02),
+        terrainPlaneZ(d, visual.faceDepth + 0.02, manifest),
       );
       mesh.add(cap);
     }
@@ -193,11 +192,11 @@ function createWorldTools(THREE) {
           new THREE.PlaneGeometry(visual.edgeWidth, edgeHeight),
           visualMaterial(textures, visual.edge),
         );
-        edge.name = 'world-one-cliff-edge';
+        edge.name = `${manifest.id}-cliff-edge`;
         edge.position.set(
           side * visualWidth / 2,
           edgeY,
-          terrainPlaneZ(d, visual.faceDepth + 0.03),
+          terrainPlaneZ(d, visual.faceDepth + 0.03, manifest),
         );
         mesh.add(edge);
       }
@@ -387,6 +386,8 @@ function buildWorld(state, tools) {
     buildDeco,
   } = tools;
   const L = state.level, th = L.theme, C = th.colors;
+  const manifest = th.visuals ?? WORLD_ONE_VISUALS;
+  const sprites = manifest.sprites;
 
   for (const b of L.boxes) {
     const [x, y, z, w, h, d, ck] = b;
@@ -396,7 +397,7 @@ function buildWorld(state, tools) {
     );
     mesh.position.set(x, y, z);
     if (!['ground', 'ground2'].includes(ck)) {
-      addTerrainVisual(mesh, state.textures, ck, w, h, d);
+      addTerrainVisual(mesh, state.textures, ck, w, h, d, manifest);
     }
     state.scene.add(mesh);
     state.solids.push({ mesh, aabb: new AABB(x, y, z, w, h, d) });
@@ -406,7 +407,7 @@ function buildWorld(state, tools) {
       width: w,
       top: y + h / 2,
       x,
-    })) {
+    }, manifest)) {
       const prop = makeSprite(state.textures, slot.path, slot.width, slot.height);
       prop.position.set(x + slot.xOffset, slot.y, slot.z);
       state.scene.add(prop);
@@ -416,7 +417,7 @@ function buildWorld(state, tools) {
   for (const [x, y, z, w, h, d, kind] of mergeGroundVisualRuns(L.boxes)) {
     const visualRoot = new THREE.Group();
     visualRoot.position.set(x, y, z);
-    addTerrainVisual(visualRoot, state.textures, kind, w, h, d);
+    addTerrainVisual(visualRoot, state.textures, kind, w, h, d, manifest);
     state.scene.add(visualRoot);
   }
 
@@ -424,6 +425,30 @@ function buildWorld(state, tools) {
   state.doors = [];
   state.doorCd = 0;
   for (const dr of L.doors || []) {
+    if (sprites.door) {
+      const dimensions = manifest.landmarks?.door ?? { width: 3.2, height: 3.2 };
+      const portal = makeSprite(
+        state.textures,
+        sprites.door,
+        dimensions.width,
+        dimensions.height,
+      );
+      portal.center.set(0.5, 0);
+      portal.position.set(dr.at[0], dr.at[1], 0.8);
+      const glow = new THREE.Mesh(
+        new THREE.PlaneGeometry(dimensions.width * 0.28, dimensions.height * 0.58),
+        new THREE.MeshBasicMaterial({
+          color: 0xffe4a0,
+          transparent: true,
+          opacity: 0.45,
+          depthWrite: false,
+        }),
+      );
+      glow.position.set(dr.at[0], dr.at[1] + dimensions.height * 0.46, 0.9);
+      state.scene.add(portal, glow);
+      state.doors.push({ at: dr.at, to: dr.to, glow });
+      continue;
+    }
     const arch = new THREE.Group();
     for (const dx of [-0.75, 0.75]) {
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.35, 2.4, 0.5), mat(C.brick));
@@ -447,7 +472,7 @@ function buildWorld(state, tools) {
       new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
     );
     mesh.position.set(x, y, z);
-    addTerrainVisual(mesh, state.textures, 'plat', w, h, d);
+    addTerrainVisual(mesh, state.textures, 'plat', w, h, d, manifest);
     state.scene.add(mesh);
     state.solids.push({
       mesh, aabb: new AABB(x, y, z, w, h, d),
@@ -459,10 +484,10 @@ function buildWorld(state, tools) {
   for (const hz of L.hazards || []) {
     const [x, y, z, w, d] = hz;
     const rt = state.textures.cropped(
-      WORLD_ONE_VISUALS.hazard.surface,
-      WORLD_ONE_VISUALS.hazard.uv,
+      manifest.hazard.surface,
+      manifest.hazard.uv,
       {
-        removeLightNeutral: WORLD_ONE_VISUALS.hazard.removeLightNeutral,
+        removeLightNeutral: manifest.hazard.removeLightNeutral,
         seamlessHorizontal: true,
       },
     );
@@ -472,7 +497,7 @@ function buildWorld(state, tools) {
       new THREE.MeshBasicMaterial({
         map: rt,
         transparent: true,
-        opacity: WORLD_ONE_VISUALS.hazard.opacity,
+        opacity: manifest.hazard.opacity,
         depthWrite: false,
       }),
     );
@@ -482,14 +507,14 @@ function buildWorld(state, tools) {
   }
 
   for (const c of L.coins || []) {
-    const s = makeSprite(state.textures, SPRITES.tomato, 0.9, 0.9);
+    const s = makeSprite(state.textures, sprites.tomato, 0.9, 0.9);
     s.position.set(c[0], c[1] + 0.5, c[2]);
     state.scene.add(s);
     state.coins.push({ sprite: s, base: c[1] + 0.5, taken: false });
   }
 
   for (const it of L.items || []) {
-    const s = makeSprite(state.textures, SPRITES[it.t], 1.1, 1.1);
+    const s = makeSprite(state.textures, sprites[it.t], 1.1, 1.1);
     s.position.set(it.p[0], it.p[1] + 0.8, it.p[2]);
     const bubble = new THREE.Mesh(new THREE.SphereGeometry(0.85, 14, 10),
       new THREE.MeshBasicMaterial({ color: 0xfff2cc, transparent: true, opacity: 0.22 }));
@@ -501,7 +526,7 @@ function buildWorld(state, tools) {
   for (const e of L.enemies || []) spawnEnemy(state, e);
 
   if (L.boss) {
-    const s = makeSprite(state.textures, SPRITES.boss, 5.2, 5.2);
+    const s = makeSprite(state.textures, sprites.boss, 5.2, 5.2);
     s.position.set(L.boss.p[0], L.boss.p[1], L.boss.p[2]);
     state.scene.add(s);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.12, 8, 24),
@@ -516,27 +541,41 @@ function buildWorld(state, tools) {
   }
 
   if (L.checkpoint) {
-    const g = new THREE.Group();
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 4, 8), mat(0xd9c9a0));
-    pole.position.y = 2; g.add(pole);
-    const flag = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.4, 4), mat(0x999999));
-    flag.rotation.z = -Math.PI / 2; flag.position.set(0.75, 3.4, 0); g.add(flag);
-    g.position.set(...L.checkpoint);
-    state.scene.add(g);
-    state.checkpointFlag = flag;
+    if (sprites.checkpoint) {
+      const checkpoint = makeSprite(state.textures, sprites.checkpoint, 2.6, 3.9);
+      checkpoint.center.set(0.5, 0);
+      checkpoint.position.set(L.checkpoint[0], L.checkpoint[1], 0.8);
+      state.scene.add(checkpoint);
+      state.checkpointFlag = checkpoint;
+    } else {
+      const g = new THREE.Group();
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 4, 8), mat(0xd9c9a0));
+      pole.position.y = 2; g.add(pole);
+      const flag = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.4, 4), mat(0x999999));
+      flag.rotation.z = -Math.PI / 2; flag.position.set(0.75, 3.4, 0); g.add(flag);
+      g.position.set(...L.checkpoint);
+      state.scene.add(g);
+      state.checkpointFlag = flag;
+    }
   }
 
   if (L.goal) {
     state.goalObj = new THREE.Group();
-    const arch = makeSprite(state.textures, SPRITES.goal, 6.4, 6.4);
-    arch.position.y = 3.1;
+    const dimensions = manifest.landmarks?.goal ?? { width: 6.4, height: 6.4, y: 3.1 };
+    const arch = makeSprite(
+      state.textures,
+      sprites.goal,
+      dimensions.width,
+      dimensions.height,
+    );
+    arch.position.y = dimensions.y;
     state.goalObj.add(arch);
     state.goalObj.userData.fork = null;
     state.goalObj.position.set(...L.goal);
     state.scene.add(state.goalObj);
   }
   // start signpost
-  const sign = makeSprite(state.textures, SPRITES.start, 2.2, 3.3);
+  const sign = makeSprite(state.textures, sprites.start, 2.2, 3.3);
   sign.position.set(L.spawn[0] + 2.5, L.spawn[1] - 2.35, 1.5);
   state.scene.add(sign);
 

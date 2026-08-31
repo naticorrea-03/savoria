@@ -24,6 +24,49 @@ export const CHARACTERS = [
 
 const RELEASED_IDS = new Set(RELEASED_LEVELS.map(({ id }) => id));
 
+export function titleProgressFor(save = createFreshSave()) {
+  const best = save.best ?? {};
+  const completedCourses = RELEASED_LEVELS.filter(({ id }) => best[id] !== undefined).length;
+  const totalStars = Object.values(best).reduce(
+    (total, stars) => total + (Number(stars) || 0),
+    0,
+  );
+  const worldStars = Object.fromEntries(RELEASED_WORLDS.map(({ n }) => [
+    n,
+    RELEASED_LEVELS
+      .filter(({ world }) => world === n)
+      .reduce((total, { id }) => total + (best[id] ?? 0), 0),
+  ]));
+  const openCount = Math.max(
+    1,
+    Math.min(RELEASED_LEVELS.length, Number(save.unlocked) || 1),
+  );
+  const current = RELEASED_LEVELS.find(
+    ({ id }, index) => index < openCount && best[id] === undefined,
+  ) ?? RELEASED_LEVELS[openCount - 1];
+
+  return {
+    completedCourses,
+    currentLevelId: current.id,
+    currentLevelName: current.name,
+    currentWorld: current.world,
+    totalStars,
+    worldStars,
+  };
+}
+
+function completionState(levelId) {
+  const index = RELEASED_LEVELS.findIndex(({ id }) => id === levelId);
+  const level = RELEASED_LEVELS[index];
+  if (!level) return null;
+  const nextLevel = RELEASED_LEVELS[index + 1];
+  return {
+    nextUnlocked: Math.min(RELEASED_LEVELS.length, index + 2),
+    worldComplete: !nextLevel || nextLevel.world !== level.world,
+    worldNumber: level.world,
+  };
+}
+
 export function createWebGLCapabilityProbe(createCanvas) {
   let cached;
   return () => {
@@ -167,16 +210,22 @@ export function reduceUiState(state, event) {
       return state.screen === 'paused' ? { ...state, screen: 'playing' } : state;
     case 'COURSE_COMPLETE': {
       if (!RELEASED_IDS.has(event.levelId)) return state;
-      const nextUnlocked = event.levelId === '1-1' ? 2 : state.save.unlocked;
+      const completion = completionState(event.levelId);
       return {
         ...state,
         screen: 'complete',
-        save: recordCompletion(state.save, event.levelId, event.stars, nextUnlocked),
+        save: recordCompletion(
+          state.save,
+          event.levelId,
+          event.stars,
+          completion.nextUnlocked,
+        ),
         completion: {
           levelId: event.levelId,
           stars: Math.min(3, Math.max(0, event.stars)),
           stats: event.stats ?? {},
-          worldComplete: event.levelId === '1-2',
+          worldComplete: completion.worldComplete,
+          worldNumber: completion.worldNumber,
         },
       };
     }
@@ -247,6 +296,39 @@ function renderCharacters(doc, state) {
   )));
 }
 
+function renderTitleHub(doc, state) {
+  const progress = titleProgressFor(state.save);
+  const world = RELEASED_WORLDS.find(({ n }) => n === progress.currentWorld);
+  const courseStars = state.save.best[progress.currentLevelId] ?? 0;
+  const sushiOpen = state.save.unlocked >= 3;
+
+  const copy = {
+    'title-total-stars': `${progress.totalStars}/12`,
+    'title-completed-courses': `${progress.completedCourses}/4`,
+    'title-current-world': `World ${progress.currentWorld} · ${world?.name ?? 'Savoria'}`,
+    'title-current-course': `${progress.currentLevelId} ${progress.currentLevelName}`,
+    'title-world-one-stars': `${progress.worldStars[1]}/6 stars`,
+    'title-world-two-stars': sushiOpen ? `${progress.worldStars[2]}/6 stars` : 'Locked',
+  };
+  for (const [id, text] of Object.entries(copy)) {
+    const element = doc.getElementById(id);
+    if (element) element.textContent = text;
+  }
+
+  const stars = doc.getElementById('title-current-stars');
+  if (stars) {
+    stars.textContent = `${'★'.repeat(courseStars)}${'☆'.repeat(3 - courseStars)}`;
+    stars.setAttribute('aria-label', `${courseStars} of 3 course stars`);
+  }
+
+  doc.querySelector('[data-world="2"]')?.classList.toggle('locked', !sushiOpen);
+  for (const chef of doc.querySelectorAll('.title-chef')) {
+    const selected = chef.dataset.characterId === state.save.chef;
+    chef.classList.toggle('is-selected', selected);
+    chef.setAttribute('aria-current', selected ? 'true' : 'false');
+  }
+}
+
 function makeLevelButton(doc, level, index, state) {
   const open = index < state.save.unlocked;
   const stars = state.save.best[level.id] ?? 0;
@@ -291,7 +373,7 @@ function renderWorld(doc, state) {
     );
     const strip = doc.createElement('section');
     strip.className = 'world-strip';
-    strip.style.backgroundImage = "url('assets/world1/world-map-background.png')";
+    strip.style.backgroundImage = `url('${world.mapBackground ?? world.thumb}')`;
     strip.setAttribute('aria-label', `World ${world.n}, ${world.name}`);
 
     const badge = doc.createElement('div');
@@ -329,7 +411,7 @@ function renderCompletion(doc, completion) {
   const stats = doc.getElementById('complete-stats');
   if (title) {
     title.textContent = completion.worldComplete
-      ? 'World 1 complete!'
+      ? `World ${completion.worldNumber} complete!`
       : `${level?.name ?? 'Course'} clear!`;
   }
   if (stars) {
@@ -360,7 +442,7 @@ function renderError(doc, error) {
   asset.textContent = '';
   asset.classList.add('hidden');
   retry.classList.toggle('hidden', !error?.retryable);
-  link.textContent = error?.gameOver ? 'World 1 map' : 'Back to Savoria';
+  link.textContent = error?.gameOver ? 'World map' : 'Back to Savoria';
   link.href = error?.gameOver ? 'play/' : './';
   link.dataset.action = error?.gameOver ? 'quit-to-world' : '';
 
@@ -417,10 +499,27 @@ export function renderUi(state, { doc = document, previousScreen = lastRenderedS
     setVisible(doc.getElementById(id), screenIds[state.screen] === id);
   }
 
+  renderTitleHub(doc, state);
   renderCharacters(doc, state);
   renderWorld(doc, state);
   renderCompletion(doc, state.completion);
   renderError(doc, state.error);
+
+  const selectedLevel = RELEASED_LEVELS[state.selectedLevelIndex];
+  const selectedWorld = RELEASED_WORLDS.find(({ n }) => n === selectedLevel?.world);
+  const loadingTitle = doc.getElementById('loading-title');
+  const loadingProgress = doc.getElementById('loading-progress');
+  const mapButtons = [doc.getElementById('btn-quit'), doc.getElementById('btn-next')];
+  if (loadingTitle) loadingTitle.textContent = `Loading ${selectedWorld?.name ?? 'Savoria'}`;
+  if (loadingProgress) {
+    loadingProgress.setAttribute(
+      'aria-label',
+      `${selectedWorld?.name ?? 'Savoria'} loading progress`,
+    );
+  }
+  for (const button of mapButtons) {
+    if (button) button.textContent = 'World map';
+  }
 
   const gameStage = doc.getElementById('game-stage');
   const hud = doc.getElementById('hud');

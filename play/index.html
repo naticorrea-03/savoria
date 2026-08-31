@@ -7,6 +7,8 @@
   <title>Play Savoria</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍝</text></svg>">
   <link rel="preload" href="assets/world1/world-map-background.png" as="image" fetchpriority="high">
+  <link rel="preload" href="assets/world2/world-map-background.png" as="image" fetchpriority="high">
+  <link rel="preload" href="assets/home/savoria-kingdom-hub.png" as="image" fetchpriority="high">
   <link rel="stylesheet" href="styles/tokens.css">
   <link rel="stylesheet" href="styles/game.css">
 </head>
@@ -22,12 +24,95 @@
     <div id="game-stage" class="hidden" data-primary tabindex="-1" aria-label="Savoria course"></div>
 
     <div id="title-screen" class="screen" data-ui-state="title">
-      <a class="title-contribute" href="https://github.com/nataliacorrea03/savoria">Contribute on GitHub</a>
-      <div class="title-panel">
-        <div class="logo-stage title-logo-stage"><img class="logo" src="assets/sprites/savoria_logo.png" alt="Savoria"></div>
-        <div class="title-world"><span>World 1</span> Pasta Plains</div>
-        <button class="btn" id="btn-play" data-action="start" data-primary>Play</button>
-        <div class="control-hint"><kbd>←</kbd><kbd>→</kbd> move <kbd>Space</kbd> double jump</div>
+      <header class="title-topbar">
+        <div class="title-brand">
+          <img class="logo" src="assets/sprites/savoria_logo.png" alt="Savoria: A Delicious Adventure">
+        </div>
+        <div class="title-progress" aria-label="Adventure progress">
+          <div class="title-stat"><span aria-hidden="true">⭐</span><strong id="title-total-stars">0/12</strong><small>stars</small></div>
+          <div class="title-stat"><span aria-hidden="true">🍅</span><strong id="title-completed-courses">0/4</strong><small>courses</small></div>
+          <div class="title-stat"><span aria-hidden="true">🗺️</span><strong>2</strong><small>ready</small></div>
+        </div>
+      </header>
+
+      <div class="title-hub">
+        <section class="title-party" role="region" aria-label="Chef party">
+          <div class="title-adventure-card">
+            <span class="title-ribbon" id="title-current-world">World 1 · Pasta Plains</span>
+            <p class="title-kicker">Next course</p>
+            <h1 id="title-current-course">1-1 Farfalle Fields</h1>
+            <div class="title-current-stars" id="title-current-stars" aria-label="No course stars">☆☆☆</div>
+            <p>Pick your chef, collect every tomato, and reach the landmark.</p>
+            <button class="btn" id="btn-play" data-action="start" data-primary>Continue adventure</button>
+          </div>
+
+          <div class="title-chef-stage" aria-label="Your three chefs">
+            <figure class="title-chef title-chefno" data-character-id="chefno">
+              <img src="assets/sprites/chefno.png" alt="Chefno">
+              <figcaption>Chefno</figcaption>
+            </figure>
+            <figure class="title-chef title-fatsio" data-character-id="fatsio">
+              <img src="assets/sprites/fatsio.png" alt="Fatsio">
+              <figcaption>Fatsio</figcaption>
+            </figure>
+            <figure class="title-chef title-dinnerette" data-character-id="dinnerette">
+              <img src="assets/sprites/dinnerette.png" alt="Dinnerette">
+              <figcaption>Dinnerette</figcaption>
+            </figure>
+          </div>
+
+          <div class="title-kitchen-kit" aria-label="Kitchen kit">
+            <span class="kit-label">Kitchen kit</span>
+            <div><img src="assets/sprites/tomato.png" alt="">Tomatoes</div>
+            <div><img src="assets/sprites/basil_leaf.png" alt="">Basil</div>
+            <div><img src="assets/sprites/parmesan_shield.png" alt="">Parmesan</div>
+            <div class="kit-controls"><kbd>←</kbd><kbd>→</kbd> move <kbd>Space</kbd> double jump</div>
+          </div>
+        </section>
+
+        <aside class="title-world-board" aria-label="Adventure board">
+          <div class="title-board-heading">
+            <span>Savoria world tour</span>
+            <h2>Select world</h2>
+          </div>
+          <article class="title-world-card pasta-card" data-world="1">
+            <img src="assets/sprites/world1_thumb.png" alt="Pasta Plains">
+            <div class="title-world-number">1</div>
+            <div class="title-world-copy"><strong>Pasta Plains</strong><span>Italian cuisine</span></div>
+            <div class="title-world-rating" id="title-world-one-stars">0/6 stars</div>
+          </article>
+          <article class="title-world-card sushi-card" data-world="2">
+            <img src="assets/sprites/world2_thumb.png" alt="Sushi Shores">
+            <div class="title-world-number">2</div>
+            <div class="title-world-copy"><strong>Sushi Shores</strong><span>Japanese cuisine</span></div>
+            <div class="title-world-rating" id="title-world-two-stars">Locked</div>
+          </article>
+          <article class="title-world-card taco-card unreleased locked" data-world="3" aria-label="World 3, Taco Territory, locked" aria-disabled="true">
+            <img src="assets/sprites/world3_thumb.png" alt="">
+            <div class="title-world-number">3</div>
+            <div class="title-world-copy"><strong>Taco Territory</strong><span>Mexican cuisine</span></div>
+            <div class="title-world-rating">🔒 Locked</div>
+          </article>
+          <article class="title-world-card curry-card unreleased locked" data-world="4" aria-label="World 4, Curry Cliffs, locked" aria-disabled="true">
+            <img src="assets/sprites/world4_thumb.png" alt="">
+            <div class="title-world-number">4</div>
+            <div class="title-world-copy"><strong>Curry Cliffs</strong><span>Indian cuisine</span></div>
+            <div class="title-world-rating">🔒 Locked</div>
+          </article>
+          <article class="title-world-card dumpling-card unreleased locked" data-world="5" aria-label="World 5, Dumpling Dynasty, locked" aria-disabled="true">
+            <img src="assets/sprites/world5_thumb.png" alt="">
+            <div class="title-world-number">5</div>
+            <div class="title-world-copy"><strong>Dumpling Dynasty</strong><span>Chinese cuisine</span></div>
+            <div class="title-world-rating">🔒 Locked</div>
+          </article>
+          <article class="title-world-card dessert-card unreleased locked" data-world="6" aria-label="World 6, Dessert Dome, locked" aria-disabled="true">
+            <img src="assets/sprites/world6_thumb.png" alt="">
+            <div class="title-world-number">6</div>
+            <div class="title-world-copy"><strong>Dessert Dome</strong><span>Sweet cuisine</span></div>
+            <div class="title-world-rating">🔒 Locked</div>
+          </article>
+          <a class="title-contribute" href="https://github.com/nataliacorrea03/savoria">Build the next course on GitHub</a>
+        </aside>
       </div>
     </div>
 
@@ -41,8 +126,8 @@
     <div id="map-screen" class="screen hidden" data-ui-state="world">
       <div class="map-head">
         <div>
-          <div class="map-kicker">World 1</div>
-          <h1 class="screen-title">Pasta Plains</h1>
+          <div class="map-kicker">Choose a course</div>
+          <h1 class="screen-title">Savoria Worlds</h1>
         </div>
         <div class="map-meta">👨‍🍳 ×<span id="map-lives">4</span></div>
       </div>
@@ -74,9 +159,9 @@
     <div id="loading-screen" class="screen loading-screen hidden" data-ui-state="loading" tabindex="-1" data-primary aria-labelledby="loading-title">
       <div class="panel loading-panel">
         <div class="panel-kicker">Preparing the kitchen</div>
-        <h1 id="loading-title">Loading World 1</h1>
+        <h1 id="loading-title">Loading Savoria</h1>
         <div id="loading-percent">0%</div>
-        <progress id="loading-progress" max="100" value="0" aria-label="World 1 loading progress">0%</progress>
+        <progress id="loading-progress" max="100" value="0" aria-label="Savoria loading progress">0%</progress>
       </div>
     </div>
 
@@ -86,7 +171,7 @@
         <h1 id="pause-title">Paused</h1>
         <button class="btn" id="btn-resume" data-action="resume" data-primary>Resume</button>
         <button class="btn small" id="btn-restart" data-action="replay">Restart course</button>
-        <button class="btn small" id="btn-quit" data-action="quit-to-world">World 1 map</button>
+        <button class="btn small" id="btn-quit" data-action="quit-to-world">World map</button>
       </div>
     </div>
 
@@ -96,7 +181,7 @@
         <h1 id="complete-title">Course clear!</h1>
         <div class="stars" id="complete-stars"></div>
         <div class="stats" id="complete-stats"></div>
-        <button class="btn" id="btn-next" data-action="continue" data-primary>World 1 map</button>
+        <button class="btn" id="btn-next" data-action="continue" data-primary>World map</button>
         <button class="btn small" id="btn-replay" data-action="replay">Replay course</button>
       </div>
     </div>

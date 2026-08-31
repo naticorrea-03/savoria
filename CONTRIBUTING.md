@@ -2,9 +2,9 @@
 
 ## Start here
 
-Released courses are defined in [`js/levels/world-one.js`](./js/levels/world-one.js). Read [`js/levels/validate.js`](./js/levels/validate.js) before changing a recipe. Read [`js/levels/compiler.js`](./js/levels/compiler.js) when you need to understand what a primitive creates.
+Released courses are defined in [`js/levels/world-one.js`](./js/levels/world-one.js) and [`js/levels/world-two.js`](./js/levels/world-two.js). Read [`js/levels/validate.js`](./js/levels/validate.js) before changing a recipe. Read [`js/levels/compiler.js`](./js/levels/compiler.js) when you need to understand what a primitive creates.
 
-Worlds 2 through 6 in `js/experimental/` are hidden experiments. Do not present them as released content or add them to the release registry.
+Worlds 3 through 6 in `js/experimental/` are hidden experiments. Do not present them as released content or add them to the release registry.
 
 ## Claude Code prompt
 
@@ -62,7 +62,7 @@ Stop before committing if the validator or reachability tests fail.
 - Include `goal` or `boss`.
 - Keep every required jump reachable through normal movement.
 - Play the changed course locally on desktop.
-- Keep hidden experimental worlds out of the release flow.
+- Keep Worlds 3 through 6 out of the release flow.
 
 ## New-course proposals
 

@@ -8,15 +8,15 @@ test('invalid JSON becomes a recoverable fresh save', () => {
   assert.deepEqual(result.save, createFreshSave());
 });
 
-test('v2 progress migrates into the current schema', () => {
+test('World 1 progress migrates into the World 2 save schema', () => {
   const result = parseSave(JSON.stringify({ unlocked: 2, best: { '1-1': 3 } }));
   assert.equal(result.recovered, false);
-  assert.equal(result.save.version, 3);
+  assert.equal(result.save.version, 4);
   assert.equal(result.save.unlocked, 2);
   assert.equal(result.save.best['1-1'], 3);
 });
 
-test('completion updates a copy and never unlocks past World 1', () => {
+test('completion updates a copy and unlocks the next released course', () => {
   const original = createFreshSave();
   const updated = recordCompletion(original, '1-1', 2, 2);
   assert.equal(updated.best['1-1'], 2);
@@ -24,11 +24,23 @@ test('completion updates a copy and never unlocks past World 1', () => {
   assert.deepEqual(original, createFreshSave());
 });
 
-test('completion rejects experimental level IDs', () => {
+test('World 1 completion can unlock Sushi Shores', () => {
   const original = createFreshSave();
-  const updated = recordCompletion(original, '2-1', 3, 2);
+  const updated = recordCompletion(original, '1-2', 3, 3);
+  assert.equal(updated.best['1-2'], 3);
+  assert.equal(updated.unlocked, 3);
+});
+
+test('completion rejects unreleased level IDs', () => {
+  const original = createFreshSave();
+  const updated = recordCompletion(original, '3-1', 3, 5);
   assert.deepEqual(updated, original);
   assert.notEqual(updated, original);
+});
+
+test('completion never unlocks past Sushi Shores', () => {
+  const updated = recordCompletion(createFreshSave(), '2-2', 3, 9);
+  assert.equal(updated.unlocked, 4);
 });
 
 test('completion clamps integer star totals to the released range', () => {

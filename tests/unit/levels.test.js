@@ -19,9 +19,12 @@ function snapshotLevel(definition) {
   };
 }
 
-test('release exposes only two World 1 levels', () => {
-  assert.deepEqual(RELEASED_WORLDS.map((world) => world.n), [1]);
-  assert.deepEqual(RELEASED_LEVELS.map((level) => level.id), ['1-1', '1-2']);
+test('release exposes four courses across Pasta Plains and Sushi Shores', () => {
+  assert.deepEqual(RELEASED_WORLDS.map((world) => world.n), [1, 2]);
+  assert.deepEqual(
+    RELEASED_LEVELS.map((level) => level.id),
+    ['1-1', '1-2', '2-1', '2-2'],
+  );
 });
 
 test('every released level validates and compiles to a goal', () => {
@@ -35,7 +38,7 @@ test('every released level validates and compiles to a goal', () => {
 });
 
 test('every World 1 course contains a collectible basil pickup', () => {
-  for (const definition of RELEASED_LEVELS) {
+  for (const definition of RELEASED_LEVELS.filter(({ world }) => world === 1)) {
     const level = buildReleasedLevel(definition);
     assert.ok(
       level.items.some((item) => item.t === 'basil'),
@@ -129,6 +132,30 @@ test('World 1 generated data stays at the approved gameplay baseline', () => {
     goal: [143.6, 6.5, 0],
     length: 148.6,
     coins: 33,
+    initialHearts: 3,
+    initialTimer: 280,
+  });
+});
+
+test('World 2 generated data stays at the approved gameplay baseline', () => {
+  assert.deepEqual(snapshotLevel(RELEASED_LEVELS[2]), {
+    id: '2-1',
+    spawn: [2, 4, 0],
+    checkpoint: [65, 0.7, 0],
+    goal: [127, 0.5, 0],
+    length: 132,
+    coins: 37,
+    initialHearts: 3,
+    initialTimer: 260,
+  });
+
+  assert.deepEqual(snapshotLevel(RELEASED_LEVELS[3]), {
+    id: '2-2',
+    spawn: [2, 4, 0],
+    checkpoint: [66.8, 4.4, 0],
+    goal: [147.8, 7, 0],
+    length: 152.8,
+    coins: 25,
     initialHearts: 3,
     initialTimer: 280,
   });

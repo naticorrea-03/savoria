@@ -130,6 +130,34 @@ export function compileSegments(def) {
           hazard: !opts.safeGround,
           mover: { ...mover, transfer: 'exit' },
         });
+      } else if (opts.plat) {
+        const platformLeft = x + len / 2 - 1.6;
+        const platformRight = x + len / 2 + 1.6;
+        const platformTop = g + 0.05;
+        addRequiredJump(sourceIndex, kind, {
+          takeoffX: x,
+          takeoffY: g,
+          landingX: platformLeft,
+          landingY: platformTop,
+          gap: platformLeft - x,
+          rise: platformTop - g,
+          landingWidth: 3.2,
+          transfer: 'platform-entry',
+          requiresRun: opts.requiresRun,
+          hazard: !opts.safeGround,
+        });
+        addRequiredJump(sourceIndex, kind, {
+          takeoffX: platformRight,
+          takeoffY: platformTop,
+          landingX: x + len,
+          landingY: g,
+          gap: x + len - platformRight,
+          rise: g - platformTop,
+          landingWidth: 6,
+          transfer: 'platform-exit',
+          requiresRun: opts.requiresRun,
+          hazard: !opts.safeGround,
+        });
       } else {
         addRequiredJump(sourceIndex, kind, {
           takeoffX: x,
@@ -209,13 +237,47 @@ export function compileSegments(def) {
       x += len;
     } else if (kind === 'plats') {
       const n = a;
+      let previousRight = x;
+      let previousTop = g;
       for (let i = 0; i < n; i++) {
         const px = x + 2 + i * 5;
         const py = g + (i % 2) * 1.6;
+        const platformLeft = px - 1.7;
+        const platformRight = px + 1.7;
+        addRequiredJump(sourceIndex, kind, {
+          takeoffX: previousRight,
+          takeoffY: previousTop,
+          landingX: platformLeft,
+          landingY: py + 0.05,
+          gap: Math.max(0, platformLeft - previousRight),
+          rise: py + 0.05 - previousTop,
+          landingWidth: 3.4,
+          transfer: i === 0 ? 'enter' : 'platform',
+          requiresRun: opts.requiresRun,
+          hazard: true,
+        });
         out.boxes.push([px, py - 0.4, 0, 3.4, 0.9, 6, 'plat']);
         if (opts.coins) out.coins.push([px, py + 1.6, 0]);
+        previousRight = platformRight;
+        previousTop = py + 0.05;
       }
-      x += 2 + n * 5;
+      const segmentEnd = x + 2 + n * 5;
+      const nextKind = def.segs[sourceIndex + 1]?.[0];
+      if (nextKind !== 'pillars') {
+        addRequiredJump(sourceIndex, kind, {
+          takeoffX: previousRight,
+          takeoffY: previousTop,
+          landingX: segmentEnd,
+          landingY: g,
+          gap: Math.max(0, segmentEnd - previousRight),
+          rise: g - previousTop,
+          landingWidth: 6,
+          transfer: 'exit',
+          requiresRun: opts.requiresRun,
+          hazard: true,
+        });
+      }
+      x = segmentEnd;
     } else if (kind === 'roll') {
       let remaining = a, i = 0;
       while (remaining > 0) {
