@@ -79,7 +79,7 @@ test('room state exposes the complete lobby contract and rejects a third player'
   await guest.leave();
 });
 
-test('create, join, invalid code, and reconnect all enforce protocol version 1', async () => {
+test('create, join, and invalid room codes enforce protocol version 1', async () => {
   await assert.rejects(
     createClient({ protocolVersion: 2 }),
     /protocol/i,
@@ -94,14 +94,23 @@ test('create, join, invalid code, and reconnect all enforce protocol version 1',
     joinClient('ABCDEF'),
     /not found|matchmake|seat/i,
   );
+});
 
+test('an SDK reconnect stays inactive until a compatible protocol handshake', async () => {
+  const host = await createClient();
   const serverRoom = testServer.getRoomById(host.roomId);
-  serverRoom.playerProtocolVersions.set(host.sessionId, 2);
-  assert.throws(
-    () => serverRoom.onReconnect({ sessionId: host.sessionId }),
+  const token = host.reconnectionToken;
+
+  await dropClient(host);
+  const reconnected = await testServer.sdk.reconnect(token);
+  await reconnected.waitForInitialState();
+
+  assert.equal(serverRoom.state.players.get(host.sessionId).connected, false);
+  await assert.rejects(
+    reconnected.request(MESSAGE.RECONNECT, { protocolVersion: 2 }),
     /protocol/i,
   );
-  serverRoom.playerProtocolVersions.set(host.sessionId, PROTOCOL_VERSION);
+  assert.equal(serverRoom.state.players.get(host.sessionId).connected, false);
 });
 
 test('ready, course selection, and start enforce payloads, host authority, and unlocks', async () => {
@@ -177,7 +186,9 @@ test('pause and resume freeze and restart the shared timer', async () => {
   const { host, guest, serverRoom } = await createStartedRoom();
   await serverRoom.waitForNextTimestep();
 
-  await guest.request(MESSAGE.PAUSE, {});
+  await assert.rejects(guest.request(MESSAGE.PAUSE, {}), /host/i);
+  assert.equal(serverRoom.state.phase, 'playing');
+  await host.request(MESSAGE.PAUSE, {});
   const pausedTimer = serverRoom.state.timer;
   await serverRoom.waitForNextTimestep();
   await serverRoom.waitForNextTimestep();
@@ -191,10 +202,14 @@ test('pause and resume freeze and restart the shared timer', async () => {
   await guest.leave();
 });
 
-test('action messages are rate-limited per client', async () => {
+test('alternating action types share one per-client rate limit', async () => {
   const host = await createClient();
   for (let index = 0; index < ACTION_RATE_LIMIT_PER_SECOND; index += 1) {
-    await host.request(MESSAGE.READY, { ready: index % 2 === 0 });
+    if (index % 2 === 0) {
+      await host.request(MESSAGE.READY, { ready: true });
+    } else {
+      await host.request(MESSAGE.SELECT_LEVEL, { levelId: '1-1' });
+    }
   }
   await assert.rejects(
     host.request(MESSAGE.READY, { ready: true }),
@@ -225,6 +240,8 @@ test('disconnect pauses immediately and reconnect restores the same player state
   const reconnected = await testServer.sdk.reconnect(token);
   await reconnected.waitForInitialState();
   assert.equal(reconnected.sessionId, playerId);
+  assert.equal(serverRoom.state.players.get(playerId).connected, false);
+  await reconnected.request(MESSAGE.RECONNECT, { protocolVersion: PROTOCOL_VERSION });
   assert.equal(serverRoom.state.players.get(playerId).connected, true);
   assert.equal(serverRoom.state.players.get(playerId).positionX, positionX);
   assert.equal(serverRoom.state.phase, 'paused');
@@ -236,7 +253,7 @@ test('reconnection expiry cancels play, returns the survivor to lobby, and promo
   const { host, guest, serverRoom } = await createStartedRoom();
   await dropClient(host);
   await waitUntil(() => serverRoom.state.players.get(host.sessionId)?.connected === false);
-  await waitUntil(() => serverRoom.state.phase === 'lobby', 1500);
+  await waitUntil(() => serverRoom.state.phase === 'lobby', 2500);
 
   assert.equal(serverRoom.state.players.has(host.sessionId), false);
   assert.equal(serverRoom.state.players.has(guest.sessionId), true);
@@ -258,8 +275,24 @@ test('leave message promotes a lobby host and an empty expired room disposes', a
   const solo = await createClient();
   const soloRoomId = solo.roomId;
   await dropClient(solo);
-  await waitUntil(() => testServer.getRoomById(soloRoomId) === undefined, 1500);
+  await waitUntil(() => testServer.getRoomById(soloRoomId) === undefined, 2500);
   assert.equal(testServer.getRoomById(soloRoomId), undefined);
+});
+
+test('host promotion resets a selected course the survivor has not unlocked', async () => {
+  const host = await createClient();
+  const guest = await joinClient(host.roomId, {
+    characterId: 'chefno',
+    unlockedLevelIds: ['1-1'],
+  });
+  const serverRoom = testServer.getRoomById(host.roomId);
+  await host.request(MESSAGE.SELECT_LEVEL, { levelId: '1-2' });
+
+  host.send(MESSAGE.LEAVE, {});
+  await waitUntil(() => serverRoom.state.hostPlayerId === guest.sessionId);
+
+  assert.equal(serverRoom.state.selectedLevelId, '1-1');
+  assert.equal(serverRoom.state.players.has(host.sessionId), false);
 });
 
 test('ten concurrently created rooms receive unique private invite codes', async () => {

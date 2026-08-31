@@ -47,7 +47,7 @@ export class SavoriaRoom extends Room {
   courseState = null;
   latestInputs = new Map();
   campaignUnlocks = new Map();
-  playerProtocolVersions = new Map();
+  pendingReconnects = new Set();
   messageWindows = new Map();
   reservationOwnerId = '';
 
@@ -90,7 +90,6 @@ export class SavoriaRoom extends Room {
     const player = createLobbyPlayer(client.sessionId, normalized.characterId);
     this.state.players.set(client.sessionId, player);
     this.campaignUnlocks.set(client.sessionId, normalized.unlockedLevelIds);
-    this.playerProtocolVersions.set(client.sessionId, PROTOCOL_VERSION);
     this.latestInputs.set(client.sessionId, { ...NEUTRAL_INPUT });
     if (!this.state.hostPlayerId) this.state.hostPlayerId = client.sessionId;
   }
@@ -106,10 +105,9 @@ export class SavoriaRoom extends Room {
   }
 
   onReconnect(client) {
-    assertProtocol(this.playerProtocolVersions.get(client.sessionId));
     const player = this.state.players.get(client.sessionId);
     if (!player) throw applicationError('Player is no longer part of this room');
-    player.connected = true;
+    this.pendingReconnects.add(client.sessionId);
     this.latestInputs.set(client.sessionId, { ...NEUTRAL_INPUT });
   }
 
@@ -117,7 +115,7 @@ export class SavoriaRoom extends Room {
     const hadPlayer = this.state.players.has(client.sessionId);
     this.state.players.delete(client.sessionId);
     this.campaignUnlocks.delete(client.sessionId);
-    this.playerProtocolVersions.delete(client.sessionId);
+    this.pendingReconnects.delete(client.sessionId);
     this.latestInputs.delete(client.sessionId);
     this.messageWindows.delete(client.sessionId);
 
@@ -126,6 +124,7 @@ export class SavoriaRoom extends Room {
     }
     if (this.state.hostPlayerId === client.sessionId) {
       this.state.hostPlayerId = firstConnectedPlayerId(this.state.players);
+      this.resetUnauthorizedHostSelection();
     }
     for (const player of this.state.players.values()) player.ready = false;
   }
@@ -137,7 +136,7 @@ export class SavoriaRoom extends Room {
 
   registerMessages() {
     this.onMessage(MESSAGE.READY, (client, payload) => {
-      this.consumeMessage(client.sessionId, MESSAGE.READY);
+      this.consumeMessage(client.sessionId, 'action', ACTION_RATE_LIMIT_PER_SECOND);
       if (!hasExactKeys(payload, ['ready']) || typeof payload.ready !== 'boolean') {
         throw applicationError('Invalid ready message');
       }
@@ -148,7 +147,7 @@ export class SavoriaRoom extends Room {
     });
 
     this.onMessage(MESSAGE.SELECT_LEVEL, (client, payload) => {
-      this.consumeMessage(client.sessionId, MESSAGE.SELECT_LEVEL);
+      this.consumeMessage(client.sessionId, 'action', ACTION_RATE_LIMIT_PER_SECOND);
       if (!hasExactKeys(payload, ['levelId']) || typeof payload.levelId !== 'string') {
         throw applicationError('Invalid course selection message');
       }
@@ -168,11 +167,14 @@ export class SavoriaRoom extends Room {
     });
 
     this.onMessage(MESSAGE.START, async (client, payload) => {
-      this.consumeMessage(client.sessionId, MESSAGE.START);
+      this.consumeMessage(client.sessionId, 'action', ACTION_RATE_LIMIT_PER_SECOND);
       assertEmptyPayload(payload, 'start');
       if (this.state.phase !== 'lobby') throw applicationError('Course already started');
       if (client.sessionId !== this.state.hostPlayerId) {
         throw applicationError('Only the host can start');
+      }
+      if (!this.campaignUnlocks.get(client.sessionId)?.has(this.state.selectedLevelId)) {
+        throw applicationError('The selected course is locked in the host campaign');
       }
       const players = [...this.state.players.values()];
       if (players.length !== 2 || players.some((player) => !player.ready || !player.connected)) {
@@ -183,7 +185,7 @@ export class SavoriaRoom extends Room {
     });
 
     this.onMessage(MESSAGE.INPUT, (client, payload) => {
-      this.consumeMessage(client.sessionId, MESSAGE.INPUT, INPUT_RATE_LIMIT_PER_SECOND);
+      this.consumeMessage(client.sessionId, 'input', INPUT_RATE_LIMIT_PER_SECOND);
       if (!isValidInput(payload)) throw applicationError('Invalid input message');
       if (this.state.phase !== 'playing') throw applicationError('Input requires active play');
       this.requirePlayer(client.sessionId);
@@ -192,16 +194,19 @@ export class SavoriaRoom extends Room {
     });
 
     this.onMessage(MESSAGE.PAUSE, (client, payload) => {
-      this.consumeMessage(client.sessionId, MESSAGE.PAUSE);
+      this.consumeMessage(client.sessionId, 'action', ACTION_RATE_LIMIT_PER_SECOND);
       assertEmptyPayload(payload, 'pause');
       this.requirePlayer(client.sessionId);
+      if (client.sessionId !== this.state.hostPlayerId) {
+        throw applicationError('Only the host can pause');
+      }
       if (this.state.phase !== 'playing') throw applicationError('Pause requires active play');
       this.state.phase = 'paused';
       return { ok: true };
     });
 
     this.onMessage(MESSAGE.RESUME, (client, payload) => {
-      this.consumeMessage(client.sessionId, MESSAGE.RESUME);
+      this.consumeMessage(client.sessionId, 'action', ACTION_RATE_LIMIT_PER_SECOND);
       assertEmptyPayload(payload, 'resume');
       this.requirePlayer(client.sessionId);
       if (this.state.phase !== 'paused' || !this.courseState) {
@@ -215,8 +220,25 @@ export class SavoriaRoom extends Room {
       return { ok: true };
     });
 
+    this.onMessage(MESSAGE.RECONNECT, (client, payload) => {
+      this.consumeMessage(client.sessionId, 'action', ACTION_RATE_LIMIT_PER_SECOND);
+      if (!hasExactKeys(payload, ['protocolVersion'])) {
+        throw applicationError('Invalid reconnect message');
+      }
+      assertProtocol(payload.protocolVersion);
+      if (!this.pendingReconnects.has(client.sessionId)) {
+        throw applicationError('Reconnect handshake is not pending');
+      }
+      const player = this.state.players.get(client.sessionId);
+      if (!player) throw applicationError('Player is no longer part of this room');
+      player.connected = true;
+      this.pendingReconnects.delete(client.sessionId);
+      this.latestInputs.set(client.sessionId, { ...NEUTRAL_INPUT });
+      return { ok: true };
+    });
+
     this.onMessage(MESSAGE.LEAVE, (client, payload) => {
-      this.consumeMessage(client.sessionId, MESSAGE.LEAVE);
+      this.consumeMessage(client.sessionId, 'action', ACTION_RATE_LIMIT_PER_SECOND);
       assertEmptyPayload(payload, 'leave');
       client.leave(CloseCode.CONSENTED);
       return { ok: true };
@@ -257,7 +279,14 @@ export class SavoriaRoom extends Room {
     await this.unlock();
   }
 
-  consumeMessage(sessionId, messageType, limit = ACTION_RATE_LIMIT_PER_SECOND) {
+  resetUnauthorizedHostSelection() {
+    const hostUnlocks = this.campaignUnlocks.get(this.state.hostPlayerId);
+    if (!hostUnlocks || hostUnlocks.has(this.state.selectedLevelId)) return;
+    this.state.selectedLevelId = RELEASED_LEVELS.find(({ id }) => hostUnlocks.has(id))?.id
+      ?? DEFAULT_LEVEL_ID;
+  }
+
+  consumeMessage(sessionId, bucket, limit) {
     const now = Date.now();
     const cutoff = now - 1000;
     let byType = this.messageWindows.get(sessionId);
@@ -265,10 +294,10 @@ export class SavoriaRoom extends Room {
       byType = new Map();
       this.messageWindows.set(sessionId, byType);
     }
-    const recent = (byType.get(messageType) ?? []).filter((time) => time > cutoff);
+    const recent = (byType.get(bucket) ?? []).filter((time) => time > cutoff);
     if (recent.length >= limit) throw applicationError('Message rate limit exceeded');
     recent.push(now);
-    byType.set(messageType, recent);
+    byType.set(bucket, recent);
   }
 
   requirePlayer(sessionId) {

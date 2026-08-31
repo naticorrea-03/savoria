@@ -8,6 +8,7 @@ export const MESSAGE = Object.freeze({
   INPUT: 'input',
   PAUSE: 'pause',
   RESUME: 'resume',
+  RECONNECT: 'reconnect',
   LEAVE: 'leave',
 });
 
