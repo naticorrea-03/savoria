@@ -1,5 +1,8 @@
 import test, { after, afterEach, before } from 'node:test';
 import assert from 'node:assert/strict';
+import { symlink, unlink } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { boot } from '@colyseus/testing';
 import { CloseCode } from '@colyseus/sdk';
 import { createCourseSnapshot } from '../../js/gameplay/course-simulation.js';
@@ -61,6 +64,44 @@ test('one process serves health, static files, and private Colyseus rooms', asyn
     testServer.sdk.join(ROOM_NAME, joinOptions()),
     /no rooms|not found|matchmake/i,
   );
+});
+
+test('static serving exposes only the explicit browser allowlist', async () => {
+  const publicResponses = await Promise.all([
+    fetch('http://127.0.0.1:2568/'),
+    fetch('http://127.0.0.1:2568/play/'),
+    fetch('http://127.0.0.1:2568/assets/sprites/tomato.png'),
+    fetch('http://127.0.0.1:2568/styles/game.css'),
+    fetch('http://127.0.0.1:2568/js/ui/main.js'),
+    fetch('http://127.0.0.1:2568/vendor/three.module.js'),
+  ]);
+  assert.deepEqual(publicResponses.map(({ status }) => status), [200, 200, 200, 200, 200, 200]);
+
+  const privateResponses = await Promise.all([
+    '/.env',
+    '/.git/config',
+    '/server/savoria-room.js',
+    '/tests/server/savoria-server.test.js',
+    '/package-lock.json',
+    '/assets/%2e%2e/server/savoria-room.js',
+    '/assets/%252e%252e%252fserver/savoria-room.js',
+    '/assets/../server/savoria-room.js',
+  ].map((pathname) => fetch(`http://127.0.0.1:2568${pathname}`)));
+  assert.deepEqual(privateResponses.map(({ status }) => status), Array(8).fill(404));
+});
+
+test('static serving rejects an allowlisted-path symlink that escapes its public directory', async () => {
+  const link = fileURLToPath(new URL('../../assets/savoria-static-escape-test.js', import.meta.url));
+  const target = path.relative(path.dirname(link), fileURLToPath(
+    new URL('../../server/savoria-room.js', import.meta.url),
+  ));
+  await symlink(target, link);
+  try {
+    const response = await fetch('http://127.0.0.1:2568/assets/savoria-static-escape-test.js');
+    assert.equal(response.status, 404);
+  } finally {
+    await unlink(link);
+  }
 });
 
 test('room state exposes the complete lobby contract and rejects a third player', async () => {
@@ -339,6 +380,47 @@ test('authoritative completion exposes shared progress once after both chefs rea
     jumpPressed: false,
     jumpHeld: false,
   }), { ok: false });
+});
+
+test('terminal clients can both leave and release their private room code', async () => {
+  const { host, guest, serverRoom } = await createStartedRoom();
+  const roomId = host.roomId;
+  const goal = serverRoom.courseState.goal.position;
+  for (const client of [host, guest]) {
+    Object.assign(serverRoom.courseState.players[client.sessionId], {
+      positionX: goal[0], positionY: goal[1],
+    });
+  }
+  serverRoom.stepAuthoritativeSimulation(1 / 60);
+  assert.equal(serverRoom.state.phase, 'completed');
+
+  await host.leave();
+  await waitUntil(() => serverRoom.state.players.size === 1);
+  assert.equal(serverRoom.state.phase, 'completed');
+  assert.equal(serverRoom.state.completion.present, true);
+  await guest.leave();
+  await waitUntil(() => testServer.getRoomById(roomId) === undefined);
+  assert.equal(testServer.getRoomById(roomId), undefined);
+});
+
+test('the real 2-1 room state publishes both compiled doors and a per-chef teleport snap', async () => {
+  const host = await createClient();
+  const guest = await joinClient(host.roomId, { characterId: 'chefno' });
+  const serverRoom = testServer.getRoomById(host.roomId);
+  await host.request(MESSAGE.SELECT_LEVEL, { levelId: '2-1' });
+  await host.request(MESSAGE.READY, { ready: true });
+  await guest.request(MESSAGE.READY, { ready: true });
+  await host.request(MESSAGE.START, {});
+  const [entry, exit] = serverRoom.courseState.doors;
+  Object.assign(serverRoom.courseState.players[host.sessionId], {
+    positionX: entry.at[0], positionY: entry.at[1], positionZ: entry.at[2],
+  });
+
+  serverRoom.stepAuthoritativeSimulation(1 / 60);
+  assert.equal(serverRoom.state.doors.length, 2);
+  assert.equal(serverRoom.state.doors[1].atX, exit.at[0]);
+  assert.equal(serverRoom.state.players.get(host.sessionId).positionX, entry.to[0]);
+  assert.equal(serverRoom.state.players.get(host.sessionId).snapReason, 'door');
 });
 
 test('either chef losing the final life publishes one team failure', async () => {

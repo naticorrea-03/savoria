@@ -2,7 +2,8 @@ import { createPlayerMotion, stepPlayerMotion } from './player-motion.js';
 
 export function createPlayerState({ playerId, characterId, spawn }) {
   const [positionX = 0, positionY = 0, positionZ = 0] = spawn ?? [];
-  return createPlayerMotion({
+  return {
+    ...createPlayerMotion({
     playerId: String(playerId),
     characterId: String(characterId),
     positionX,
@@ -14,8 +15,13 @@ export function createPlayerState({ playerId, characterId, spawn }) {
     active: true,
     safe: false,
     reachedGoal: false,
-    groundMoverId: null,
-  });
+      groundMoverId: null,
+    }),
+    doorCooldownSeconds: 0,
+    enteredDoorId: null,
+    snapRevision: 0,
+    snapReason: '',
+  };
 }
 
 export function applyPlayerInput(player, input = {}, world = {}, seconds = 0) {

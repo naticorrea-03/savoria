@@ -134,7 +134,7 @@ export class SavoriaRoom extends Room {
     this.latestInputs.delete(client.sessionId);
     this.messageWindows.delete(client.sessionId);
 
-    if (hadPlayer && this.courseState) {
+    if (hadPlayer && this.courseState && ['playing', 'paused'].includes(this.state.phase)) {
       await this.cancelCourseToLobby();
     }
     if (this.state.hostPlayerId === client.sessionId) {

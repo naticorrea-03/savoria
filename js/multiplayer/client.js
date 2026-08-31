@@ -112,17 +112,22 @@ export class MultiplayerClient {
       room.reconnection.minDelay = RECONNECTION_DELAY_MS;
       room.reconnection.maxDelay = RECONNECTION_MAX_DELAY_MS;
     }
-    room.onStateChange((state) => this.onState(toLobbyView(state, room.sessionId)));
+    room.onStateChange((state) => {
+      if (this.room === room) this.onState(toLobbyView(state, room.sessionId));
+    });
     room.onDrop(() => {
+      if (this.room !== room) return;
       this.resetNetcode('drop');
       this.onStatus({ kind: 'reconnecting', message: 'Connection lost. Rejoining the kitchen…' });
     });
     room.onReconnect(() => {
+      if (this.room !== room) return;
       this.resetNetcode('reconnect');
       room.send(MESSAGE.RECONNECT, { protocolVersion: PROTOCOL_VERSION });
       this.onStatus({ kind: 'connected', message: 'Back in the room.' });
     });
     room.onLeave(() => {
+      if (this.room !== room) return;
       const intentional = this.intentionalLeaves.delete(room);
       this.room = null;
       if (intentional) return;
@@ -192,6 +197,8 @@ export function toLobbyView(state, localSessionId) {
       ready: player.ready === true,
       connected: player.connected !== false,
       acceptedInputCount: Number(player.acceptedInputCount) || 0,
+      snapRevision: Number(player.snapRevision) || 0,
+      snapReason: player.snapReason || '',
       isLocal: sessionId === localSessionId,
       color: playerMarkerColor(player.identityId || player.playerId),
       position: {
@@ -292,6 +299,11 @@ export function toLobbyView(state, localSessionId) {
       width: Number(platform.width) || 0,
       height: Number(platform.height) || 0,
       depth: Number(platform.depth) || 0,
+    })),
+    doors: Array.from(state?.doors ?? [], (door) => ({
+      id: door.id,
+      at: { x: Number(door.atX) || 0, y: Number(door.atY) || 0, z: Number(door.atZ) || 0 },
+      to: { x: Number(door.toX) || 0, y: Number(door.toY) || 0, z: Number(door.toZ) || 0 },
     })),
     boss: state?.boss?.present ? {
       position: positionFrom(state.boss),

@@ -279,6 +279,27 @@ test('intentional local leave ignores its consent-code closure', async () => {
   assert.deepEqual(statuses, []);
 });
 
+test('leaving is idempotent and stale room callbacks cannot clear a newly joined room', async () => {
+  const first = fakeRoom();
+  const second = fakeRoom();
+  let leaves = 0;
+  first.leave = async () => { leaves += 1; };
+  const statuses = [];
+  const client = new MultiplayerClient({
+    identity: { playerId: 'stable-player', guestName: 'Nati' },
+    onStatus: (status) => statuses.push(status),
+  });
+
+  client.bindRoom(first);
+  await Promise.all([client.leave(), client.leave()]);
+  assert.equal(leaves, 1);
+  client.bindRoom(second);
+  first.onLeave.emit(4000, 'old room');
+
+  assert.equal(client.room, second);
+  assert.deepEqual(statuses, []);
+});
+
 test('lobby view keeps duplicate chefs distinct and camera anchored locally', () => {
   const state = {
     phase: 'lobby',

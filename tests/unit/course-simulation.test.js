@@ -83,7 +83,6 @@ test('a checkpoint becomes shared and supplies the next individual respawn', () 
       { playerId: 'p2', characterId: 'chefno' },
     ],
   });
-
   gameplay.stepCourseSimulation(state, { p1: {}, p2: {} }, 1 / 60);
   assert.equal(state.checkpoint.active, true);
   assert.equal(state.checkpoint.activatedBy, 'p1');
@@ -95,6 +94,80 @@ test('a checkpoint becomes shared and supplies the next individual respawn', () 
   assert.equal(state.players.p2.positionY, 1);
   assert.equal(state.players.p2.lives, 3);
   assert.equal(state.phase, 'playing');
+});
+
+test('a compiled bonus-door pair teleports one chef once without ping-ponging', () => {
+  const state = gameplay.createCourseSimulation({
+    level: fixtureLevel({
+      spawn: [0, 0, 0],
+      enemies: [],
+      doors: [
+        { at: [0, 0], to: [10, 0] },
+        { at: [10, 0], to: [0, 0] },
+      ],
+    }),
+    seed: 22,
+    players: [
+      { playerId: 'p1', characterId: 'fatsio' },
+      { playerId: 'p2', characterId: 'chefno' },
+    ],
+  });
+  state.players.p2.positionX = 4;
+
+  gameplay.stepCourseSimulation(state, { p1: {}, p2: {} }, 1 / 60);
+  assert.deepEqual(state.doors.map(({ at, to }) => ({ at, to })), [
+    { at: [0, 0, 0], to: [10, 0, 0] },
+    { at: [10, 0, 0], to: [0, 0, 0] },
+  ]);
+  assert.equal(state.players.p1.positionX, 10);
+  assert.equal(state.players.p1.snapReason, 'door');
+  assert.equal(state.players.p1.snapRevision, 1);
+  assert.equal(state.players.p2.positionX, 4);
+
+  gameplay.stepCourseSimulation(state, { p1: {}, p2: {} }, 1 / 60);
+  assert.equal(state.players.p1.positionX, 10);
+  assert.equal(state.players.p1.snapRevision, 1);
+});
+
+test('released course 2-1 keeps both compiled teleport-door endpoints authoritative', () => {
+  const level = buildReleasedLevel(RELEASED_LEVELS.find(({ id }) => id === '2-1'));
+  const state = gameplay.createCourseSimulation({
+    level,
+    seed: 'released-door',
+    players: [{ playerId: 'p1', characterId: 'fatsio' }],
+  });
+  const [entry, exit] = state.doors;
+  Object.assign(state.players.p1, {
+    positionX: entry.at[0], positionY: entry.at[1], positionZ: entry.at[2],
+  });
+
+  gameplay.stepCourseSimulation(state, { p1: {} }, 1 / 60);
+  assert.equal(state.doors.length, 2);
+  assert.deepEqual(state.players.p1.positionX, entry.to[0]);
+  assert.deepEqual(state.doors[1].at, exit.at);
+  assert.equal(state.players.p1.snapReason, 'door');
+  gameplay.stepCourseSimulation(state, { p1: {} }, 1 / 60);
+  assert.equal(state.players.p1.positionX, entry.to[0]);
+});
+
+test('shared checkpoint and individual respawn publish authoritative snap revisions', () => {
+  const state = gameplay.createCourseSimulation({
+    level: fixtureLevel({ checkpoint: [2, 0, 0], enemies: [] }),
+    seed: 23,
+    players: [
+      { playerId: 'p1', characterId: 'fatsio' },
+      { playerId: 'p2', characterId: 'chefno' },
+    ],
+  });
+
+  gameplay.stepCourseSimulation(state, { p1: {}, p2: {} }, 1 / 60);
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(state.players).map(([id, player]) => [id, [player.snapRevision, player.snapReason]])),
+    { p1: [1, 'checkpoint'], p2: [1, 'checkpoint'] },
+  );
+  state.players.p2.positionY = -10;
+  gameplay.stepCourseSimulation(state, { p1: {}, p2: {} }, 1 / 60);
+  assert.deepEqual([state.players.p2.snapRevision, state.players.p2.snapReason], [2, 'respawn']);
 });
 
 test('the first player at the goal waits safely until every player arrives', () => {

@@ -45,6 +45,7 @@ export class MultiplayerRunLoop {
     this.authorityPlaying = false;
     this.inputAccumulator = 0;
     this.resumeRequested = false;
+    this.localSnapRevision = null;
   }
 
   get pendingInputCount() {
@@ -89,10 +90,15 @@ export class MultiplayerRunLoop {
         initial: local.position,
         simulate: predictPosition,
       });
+      this.localSnapRevision = local.snapRevision;
     } else {
-      this.localPrediction.reconcile(local.position, local.acceptedInputCount, {
-        now: receivedAt,
-      });
+      const snapReason = local.snapRevision > this.localSnapRevision
+        ? local.snapReason
+        : undefined;
+      this.localPrediction.reconcile(local.position, local.acceptedInputCount, snapReason
+        ? { now: receivedAt, reason: snapReason }
+        : { now: receivedAt });
+      this.localSnapRevision = Math.max(this.localSnapRevision, local.snapRevision);
     }
 
     for (const player of view.players) {
@@ -130,6 +136,8 @@ export class MultiplayerRunLoop {
     if (!this.lastView) return;
     this.authorityPlaying = false;
     this.resumeRequested = false;
+    this.lastAuthoritativeTick = -1;
+    this.localSnapRevision = null;
     this.snapToAuthority(this.lastView, performance.now());
   }
 
@@ -237,6 +245,7 @@ export class MultiplayerRunLoop {
       } else {
         this.localPrediction.reset(local.position);
       }
+      this.localSnapRevision = local.snapRevision;
     }
     for (const player of view.players) {
       if (player.isLocal) continue;

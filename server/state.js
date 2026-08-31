@@ -8,6 +8,10 @@ export const PlayerState = schema({
   connected: t.boolean(),
   ready: t.boolean(),
   acceptedInputCount: t.uint32(),
+  snapRevision: t.uint32(),
+  snapReason: t.string(),
+  doorCooldownSeconds: t.number(),
+  enteredDoorId: t.string(),
   positionX: t.number(),
   positionY: t.number(),
   positionZ: t.number(),
@@ -65,6 +69,16 @@ export const MovingPlatformState = schema({
   height: t.number(),
   depth: t.number(),
 }, 'SavoriaMovingPlatformState');
+
+export const DoorState = schema({
+  id: t.string(),
+  atX: t.number(),
+  atY: t.number(),
+  atZ: t.number(),
+  toX: t.number(),
+  toY: t.number(),
+  toZ: t.number(),
+}, 'SavoriaDoorState');
 
 export const CheckpointState = schema({
   present: t.boolean(),
@@ -124,6 +138,7 @@ export const RoomState = schema({
   projectiles: t.array(ProjectileState),
   collectibles: t.array(CollectibleState),
   movingPlatforms: t.array(MovingPlatformState),
+  doors: t.array(DoorState),
   boss: BossState,
 }, 'SavoriaRoomState');
 
@@ -223,6 +238,11 @@ export function applySimulationSnapshot(state, snapshot) {
       target.depth = value.depth;
     },
   );
+  replaceCollection(state.doors, snapshot.doors, DoorState, (target, value) => {
+    target.id = value.id;
+    [target.atX, target.atY, target.atZ] = value.at;
+    [target.toX, target.toY, target.toZ] = value.to;
+  });
 }
 
 export function resetCourseState(state) {
@@ -240,6 +260,7 @@ export function resetCourseState(state) {
   state.projectiles.splice(0, state.projectiles.length);
   state.collectibles.splice(0, state.collectibles.length);
   state.movingPlatforms.splice(0, state.movingPlatforms.length);
+  state.doors.splice(0, state.doors.length);
   for (const player of state.players.values()) {
     player.ready = false;
     player.acceptedInputCount = 0;
@@ -248,6 +269,10 @@ export function resetCourseState(state) {
 }
 
 function applySimulationPlayer(target, source) {
+  target.snapRevision = source.snapRevision ?? 0;
+  target.snapReason = source.snapReason ?? '';
+  target.doorCooldownSeconds = source.doorCooldownSeconds ?? 0;
+  target.enteredDoorId = source.enteredDoorId ?? '';
   target.positionX = source.positionX ?? 0;
   target.positionY = source.positionY ?? 0;
   target.positionZ = source.positionZ ?? 0;

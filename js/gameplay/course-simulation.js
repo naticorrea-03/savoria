@@ -32,6 +32,11 @@ export function createCourseSimulation({ level, seed, players }) {
     collectibles: [],
     hazards: [],
     movingPlatforms: [],
+    doors: (level.doors ?? []).map((door, index) => ({
+      id: `door-${index}`,
+      at: normalizeDoorPosition(door.at),
+      to: normalizeDoorPosition(door.to),
+    })),
     checkpoint: level.checkpoint
       ? { position: [...level.checkpoint], active: false, activatedBy: null }
       : null,
@@ -167,6 +172,7 @@ export function createCourseSnapshot(state) {
     collectibles: state.collectibles.map(cloneValue),
     hazards: state.hazards.map(cloneValue),
     movingPlatforms: state.movingPlatforms.map(cloneValue),
+    doors: state.doors.map(cloneValue),
     boss: cloneValue(state.boss),
   };
 }
@@ -189,6 +195,7 @@ function stepFixed(state, inputsByPlayer, seconds, acceptJumpPress) {
       0,
       player.invulnerabilitySeconds - seconds,
     );
+    player.doorCooldownSeconds = Math.max(0, player.doorCooldownSeconds - seconds);
     updateTimedPower(player, seconds);
     if (!player.active || player.safe) continue;
     const input = inputsByPlayer[playerId] ?? {};
@@ -370,6 +377,7 @@ function updateCourseLandmarks(state) {
       if (state.phase === 'failed') return;
       continue;
     }
+    updateDoors(state, player);
     if (
       state.checkpoint
       && !state.checkpoint.active
@@ -378,6 +386,7 @@ function updateCourseLandmarks(state) {
     ) {
       state.checkpoint.active = true;
       state.checkpoint.activatedBy = playerId;
+      for (const target of Object.values(state.players)) markPlayerSnap(target, 'checkpoint');
     }
     if (state.goal && distanceToPosition(player, state.goal.position) < 2.6) {
       player.reachedGoal = true;
@@ -469,6 +478,44 @@ function respawnPlayer(state, player) {
   player.jumpBuffer = 0;
   player.groundMoverId = null;
   player.invulnerabilitySeconds = 2;
+  markPlayerSnap(player, 'respawn');
+}
+
+function updateDoors(state, player) {
+  const enteredDoor = state.doors.find((door) => isInsideDoor(player, door));
+  if (!enteredDoor) {
+    player.enteredDoorId = null;
+    return;
+  }
+  if (player.doorCooldownSeconds > 0 || player.enteredDoorId === enteredDoor.id) return;
+  player.positionX = enteredDoor.to[0];
+  player.positionY = enteredDoor.to[1] + 0.5;
+  player.positionZ = enteredDoor.to[2];
+  player.velocityX = 0;
+  player.velocityY = 0;
+  player.velocityZ = 0;
+  player.grounded = false;
+  player.coyote = 0;
+  player.jumpBuffer = 0;
+  player.groundMoverId = null;
+  player.doorCooldownSeconds = 1.4;
+  player.enteredDoorId = state.doors.find((door) => isInsideDoor(player, door))?.id ?? enteredDoor.id;
+  markPlayerSnap(player, 'door');
+}
+
+function isInsideDoor(player, door) {
+  return Math.abs(player.positionX - door.at[0]) < 1.1
+    && Math.abs(player.positionY - door.at[1]) < 1.6
+    && Math.abs(player.positionZ - door.at[2]) < 1.1;
+}
+
+function normalizeDoorPosition(position = []) {
+  return [Number(position[0]) || 0, Number(position[1]) || 0, Number(position[2]) || 0];
+}
+
+function markPlayerSnap(player, reason) {
+  player.snapRevision += 1;
+  player.snapReason = reason;
 }
 
 function distanceToPosition(player, position) {

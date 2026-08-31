@@ -370,6 +370,9 @@ test('two clients share an invite lobby with independent names and duplicate che
       await expect.poll(() => page.evaluate(() => (
         window.__savoriaTest.multiplayer.completionCount
       ))).toBe(1);
+      await expect.poll(() => page.evaluate(() => (
+        window.__savoriaTest.multiplayer.connected
+      ))).toBe(false);
       const saved = await page.evaluate(() => JSON.parse(
         localStorage.getItem('savoria3d-save-v4'),
       ));
@@ -456,6 +459,9 @@ test('two browser contexts enter every released course through the production lo
         await expect.poll(() => page.evaluate(() => (
           window.__savoriaTest.multiplayer.completionCount
         ))).toBe(1);
+        await expect.poll(() => page.evaluate(() => (
+          window.__savoriaTest.multiplayer.connected
+        ))).toBe(false);
       }
     }
     expect(consoleErrors).toEqual([]);

@@ -11,6 +11,8 @@ function view({
   phase = 'playing',
   isHost = true,
   pauseReason = '',
+  snapRevision = 0,
+  snapReason = '',
 } = {}) {
   return {
     phase,
@@ -26,6 +28,8 @@ function view({
         isLocal: true,
         connected: true,
         acceptedInputCount: accepted,
+        snapRevision,
+        snapReason,
         position: { x: localX, y: 2, z: 0 },
       },
       {
@@ -265,6 +269,26 @@ test('state acknowledgements retire pending inputs and reconnect reset clears hi
   assert.equal(loop.pendingInputCount, 0);
   assert.equal(loop.remoteSampleCount, 1);
   assert.deepEqual(presentation.cameraTarget, presentation.local.position);
+});
+
+test('a new authoritative snap revision bypasses correction smoothing once', () => {
+  let presentation;
+  const loop = new MultiplayerRunLoop({
+    sendInput: () => {},
+    onPresentation: (next) => { presentation = next; },
+  });
+  loop.updateState(view({ localX: 0 }), 1_000);
+  loop.press('ArrowRight');
+  loop.advance(1_000);
+  loop.advance(1_017);
+  loop.updateState(view({ tick: 2, accepted: 1, localX: 8, snapRevision: 1, snapReason: 'door' }), 1_020);
+
+  assert.equal(presentation.local.position.x, 8);
+  loop.updateState(view({ tick: 3, accepted: 1, localX: 4, snapRevision: 1, snapReason: 'door' }), 1_030);
+  assert.equal(presentation.local.position.x, 8);
+  loop.release('ArrowRight');
+  loop.advance(1_095);
+  assert.equal(presentation.local.position.x, 4);
 });
 
 test('running loop ignores a reordered authoritative room tick', () => {

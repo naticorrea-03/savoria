@@ -584,6 +584,7 @@ function completeMultiplayerCourse(view) {
       hearts: local?.hearts ?? 0,
     },
   });
+  releaseTerminalMultiplayerRoom();
 }
 
 function failMultiplayerCourse(view) {
@@ -594,6 +595,15 @@ function failMultiplayerCourse(view) {
   $('online-course-screen').classList.add('hidden');
   stopMultiplayerCourse();
   dispatch({ type: 'GAME_OVER' });
+  releaseTerminalMultiplayerRoom();
+}
+
+function releaseTerminalMultiplayerRoom() {
+  const terminalClient = multiplayerClient;
+  if (!terminalClient) return;
+  void terminalClient.leave().finally(() => {
+    if (multiplayerClient === terminalClient) multiplayerClient = null;
+  });
 }
 
 function stopMultiplayerCourse() {
@@ -835,6 +845,7 @@ window.__savoriaTest = {
     get presentation() { return multiplayerPresentation; },
     get completionCount() { return multiplayerCompletionCount; },
     get failureCount() { return multiplayerFailureCount; },
+    get connected() { return Boolean(multiplayerClient?.room); },
     get renderedPlayerCount() { return multiplayerCourseRenderer?.playerVisuals.size ?? 0; },
     get hasCourseCanvas() { return Boolean(multiplayerCourseRenderer?.renderer.domElement.isConnected); },
     ...multiplayerTestHooks,

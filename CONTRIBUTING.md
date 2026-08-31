@@ -89,3 +89,5 @@ This is a project licensing choice, not legal advice.
 ## Dependency notices
 
 Contributor-facing versions, upstream projects, and licenses are in [CREDITS.md](./CREDITS.md). Keep `vendor/COLYSEUS-SDK-LICENSE.txt` with its SDK bundle. Do not replace it with a copied summary.
+
+`vendor/colyseus.js` is the exact `@colyseus/sdk` 0.18.2 bundle. Its header includes Schema 5.0.8, while the server directly uses `@colyseus/schema` 5.0.25. Keep both artifacts as published. Do not edit or regenerate the vendored bundle just to align those version strings.
