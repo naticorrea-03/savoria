@@ -45,10 +45,17 @@ test('two clients share an invite lobby with independent names and duplicate che
   const guestContext = await browser.newContext();
   const host = await hostContext.newPage();
   const guest = await guestContext.newPage();
+  const consoleErrors = [];
+  for (const [label, page] of [['host', host], ['guest', guest]]) {
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(`${label}: ${message.text()}`);
+    });
+    page.on('pageerror', (error) => consoleErrors.push(`${label}: ${error.message}`));
+  }
   await host.addInitScript(() => {
     localStorage.setItem('savoria3d-save-v4', JSON.stringify({
       version: 4,
-      unlocked: 2,
+      unlocked: 4,
       best: { '1-1': 3 },
       chef: 'fatsio',
       sound: false,
@@ -92,8 +99,8 @@ test('two clients share an invite lobby with independent names and duplicate che
       .evaluateAll((controls) => controls.map((control) => Math.round(control.getBoundingClientRect().top)));
     expect(Math.max(...controlTops) - Math.min(...controlTops)).toBeLessThanOrEqual(2);
 
-    await hostCourse.selectOption('1-2');
-    await expect(guestCourse).toHaveValue('1-2');
+    await hostCourse.selectOption('2-1');
+    await expect(guestCourse).toHaveValue('2-1');
 
     await host.getByRole('button', { name: 'Ready up' }).click();
     await guest.getByRole('button', { name: 'Ready up' }).click();
@@ -113,6 +120,10 @@ test('two clients share an invite lobby with independent names and duplicate che
       await expect(page.locator('#multiplayer-course-players').getByText('Nati', { exact: true })).toBeVisible();
       await expect(page.locator('#multiplayer-course-players').getByText('Alex', { exact: true })).toBeVisible();
       await expect(page.locator('#multiplayer-course-stage')).toBeFocused();
+      await expect(page.locator('canvas[data-multiplayer-course]')).toBeVisible();
+      await expect.poll(() => page.evaluate(() => (
+        window.__savoriaTest.multiplayer.renderedPlayerCount
+      ))).toBe(2);
       const markerBoxes = await page.locator('[data-multiplayer-player]').evaluateAll((markers) => (
         markers.map((marker) => {
           const box = marker.getBoundingClientRect();
@@ -121,6 +132,83 @@ test('two clients share an invite lobby with independent names and duplicate che
       ));
       expect(Math.abs(markerBoxes[0].left - markerBoxes[1].left)).toBeGreaterThanOrEqual(60);
     }
+
+    const ids = await host.evaluate(() => {
+      const view = window.__savoriaTest.multiplayer.view;
+      return {
+        hostId: view.players.find(({ isLocal }) => isLocal).sessionId,
+        guestId: view.players.find(({ isLocal }) => !isLocal).sessionId,
+        tomatoId: view.collectibles.find(({ kind, takenBy }) => kind === 'tomato' && !takenBy).id,
+        basilId: view.collectibles.find(({ type, takenBy }) => type === 'basil' && !takenBy).id,
+        speedId: view.collectibles.find(({ type, takenBy }) => type === 'speed' && !takenBy).id,
+      };
+    });
+    await host.evaluate(({ hostId, tomatoId }) => {
+      window.__savoriaTest.multiplayer.control({
+        action: 'collectible', playerId: hostId, targetId: tomatoId,
+      });
+    }, ids);
+    await expect.poll(() => guest.evaluate((tomatoId) => (
+      window.__savoriaTest.multiplayer.view.collectibles.find(({ id }) => id === tomatoId).takenBy
+    ), ids.tomatoId)).toBe(ids.hostId);
+    const sharedTomatoes = await host.evaluate(() => window.__savoriaTest.multiplayer.view.tomatoCount);
+    await expect.poll(() => guest.evaluate(() => (
+      window.__savoriaTest.multiplayer.view.tomatoCount
+    ))).toBe(sharedTomatoes);
+
+    await host.evaluate(({ guestId }) => {
+      window.__savoriaTest.multiplayer.control({
+        action: 'health', playerId: guestId, hearts: 2, lives: 4,
+      });
+    }, ids);
+    await expect.poll(() => host.evaluate((guestId) => (
+      window.__savoriaTest.multiplayer.view.players.find(({ sessionId }) => sessionId === guestId).hearts
+    ), ids.guestId)).toBe(2);
+    await host.evaluate(({ guestId, basilId }) => {
+      window.__savoriaTest.multiplayer.control({
+        action: 'collectible', playerId: guestId, targetId: basilId,
+      });
+    }, ids);
+    for (const page of [host, guest]) {
+      await expect.poll(() => page.evaluate((guestId) => (
+        window.__savoriaTest.multiplayer.view.players.find(({ sessionId }) => sessionId === guestId).hearts
+      ), ids.guestId)).toBe(3);
+      expect(await page.evaluate((hostId) => (
+        window.__savoriaTest.multiplayer.view.players.find(({ sessionId }) => sessionId === hostId).hearts
+      ), ids.hostId)).toBe(3);
+    }
+    await host.evaluate(({ guestId, speedId }) => {
+      window.__savoriaTest.multiplayer.control({
+        action: 'collectible', playerId: guestId, targetId: speedId,
+      });
+    }, ids);
+    await expect.poll(() => host.evaluate((guestId) => (
+      window.__savoriaTest.multiplayer.view.players.find(({ sessionId }) => sessionId === guestId).power?.type
+    ), ids.guestId)).toBe('speed');
+
+    await host.evaluate(({ hostId }) => {
+      window.__savoriaTest.multiplayer.control({ action: 'checkpoint', playerId: hostId });
+    }, ids);
+    await expect.poll(() => guest.evaluate(() => (
+      window.__savoriaTest.multiplayer.view.checkpoint.active
+    ))).toBe(true);
+    const checkpointX = await host.evaluate(() => (
+      window.__savoriaTest.multiplayer.view.checkpoint.position.x
+    ));
+    await host.evaluate(({ guestId }) => {
+      window.__savoriaTest.multiplayer.control({
+        action: 'health', playerId: guestId, hearts: 1, lives: 4,
+      });
+      window.__savoriaTest.multiplayer.control({ action: 'hazard', playerId: guestId });
+    }, ids);
+    await expect.poll(() => host.evaluate((guestId) => {
+      const player = window.__savoriaTest.multiplayer.view.players
+        .find(({ sessionId }) => sessionId === guestId);
+      return { hearts: player.hearts, lives: player.lives, x: player.position.x };
+    }, ids.guestId)).toEqual({ hearts: 3, lives: 3, x: checkpointX });
+    expect(await host.evaluate((hostId) => (
+      window.__savoriaTest.multiplayer.view.players.find(({ sessionId }) => sessionId === hostId).lives
+    ), ids.hostId)).toBe(4);
 
     const initialX = await host.evaluate(() => (
       window.__savoriaTest.multiplayer.presentation.local.position.x
@@ -142,12 +230,34 @@ test('two clients share an invite lobby with independent names and duplicate che
           && cameraTarget.z === local.position.z;
       })).toBe(true);
     }
+    await Promise.all([
+      host.screenshot({
+        path: 'docs/verification/screenshots/online-coop-host-1440x900.png',
+        animations: 'disabled',
+      }),
+      guest.screenshot({
+        path: 'docs/verification/screenshots/online-coop-guest-1440x900.png',
+        animations: 'disabled',
+      }),
+    ]);
 
     await host.keyboard.down('ArrowRight');
     await expect.poll(() => host.evaluate(() => (
       window.__savoriaTest.multiplayer.pendingInputCount
     ))).toBeGreaterThan(0);
-    await guestContext.setOffline(true);
+    const beforeReconnect = await guest.evaluate(() => {
+      const view = window.__savoriaTest.multiplayer.view;
+      const local = view.players.find(({ isLocal }) => isLocal);
+      return {
+        characterId: local.characterId,
+        hearts: local.hearts,
+        lives: local.lives,
+        powerType: local.power?.type,
+        checkpointActive: view.checkpoint.active,
+        reachedGoal: local.reachedGoal,
+      };
+    });
+    await guest.evaluate(() => window.__savoriaTest.multiplayer.drop());
     await expect.poll(() => host.evaluate(() => (
       window.__savoriaTest.multiplayer.view.phase
     )), { timeout: 15_000 }).toBe('paused');
@@ -164,10 +274,16 @@ test('two clients share an invite lobby with independent names and duplicate che
         && presentation.local.position.z === authoritative.z;
     })).toBe(true);
 
-    await guestContext.setOffline(false);
-    await expect.poll(() => guest.evaluate(() => (
+    await guest.evaluate(() => window.__savoriaTest.multiplayer.reconnect());
+    expect(await host.evaluate(() => (
       window.__savoriaTest.multiplayer.phaseHistory.includes('paused')
+    ))).toBe(true);
+    await expect.poll(() => host.evaluate(() => (
+      window.__savoriaTest.multiplayer.view.players.every(({ connected }) => connected)
     )), { timeout: 15_000 }).toBe(true);
+    await expect.poll(() => host.evaluate(() => (
+      window.__savoriaTest.multiplayer.autoResumeRequestCount
+    )), { timeout: 15_000 }).toBe(1);
     for (const page of [host, guest]) {
       await expect.poll(() => page.evaluate(() => (
         window.__savoriaTest.multiplayer.view.phase
@@ -176,12 +292,24 @@ test('two clients share an invite lobby with independent names and duplicate che
         window.__savoriaTest.multiplayer.authorityPlaying
       ))).toBe(true);
     }
-    expect(await host.evaluate(() => (
-      window.__savoriaTest.multiplayer.autoResumeRequestCount
-    ))).toBe(1);
     expect(await guest.evaluate(() => (
       window.__savoriaTest.multiplayer.autoResumeRequestCount
     ))).toBe(0);
+    await expect.poll(() => guest.evaluate(() => (
+      window.__savoriaTest.multiplayer.netcodeResetCount
+    ))).toBeGreaterThanOrEqual(1);
+    expect(await guest.evaluate(() => {
+      const view = window.__savoriaTest.multiplayer.view;
+      const local = view.players.find(({ isLocal }) => isLocal);
+      return {
+        characterId: local.characterId,
+        hearts: local.hearts,
+        lives: local.lives,
+        powerType: local.power?.type,
+        checkpointActive: view.checkpoint.active,
+        reachedGoal: local.reachedGoal,
+      };
+    })).toEqual(beforeReconnect);
 
     const resumedAccepted = await host.evaluate(() => (
       window.__savoriaTest.multiplayer.presentation.local.acceptedInputCount
@@ -191,9 +319,44 @@ test('two clients share an invite lobby with independent names and duplicate che
       window.__savoriaTest.multiplayer.presentation.local.acceptedInputCount
     ))).toBeGreaterThan(resumedAccepted);
     await host.keyboard.up('ArrowLeft');
-    await expect.poll(() => host.evaluate(() => (
-      window.__savoriaTest.multiplayer.pendingInputCount
-    ))).toBe(0);
+
+    await host.keyboard.press('Escape');
+    for (const page of [host, guest]) {
+      await expect.poll(() => page.evaluate(() => (
+        window.__savoriaTest.multiplayer.view.phase
+      ))).toBe('paused');
+    }
+    await expect(host.locator('#multiplayer-course-status')).toContainText('Course paused');
+    await expect(guest.locator('#multiplayer-course-status')).toContainText('host paused');
+    await host.keyboard.press('Escape');
+    for (const page of [host, guest]) {
+      await expect.poll(() => page.evaluate(() => (
+        window.__savoriaTest.multiplayer.view.phase
+      ))).toBe('playing');
+    }
+
+    await host.evaluate(({ hostId }) => {
+      window.__savoriaTest.multiplayer.control({ action: 'goal', playerId: hostId });
+    }, ids);
+    await expect.poll(() => guest.evaluate((hostId) => (
+      window.__savoriaTest.multiplayer.view.players.find(({ sessionId }) => sessionId === hostId).safe
+    ), ids.hostId)).toBe(true);
+    expect(await guest.evaluate(() => window.__savoriaTest.multiplayer.view.phase)).toBe('playing');
+    await host.evaluate(({ guestId }) => {
+      window.__savoriaTest.multiplayer.control({ action: 'goal', playerId: guestId });
+    }, ids);
+    for (const page of [host, guest]) {
+      await expect(page.locator('#complete-overlay')).toBeVisible();
+      await expect.poll(() => page.evaluate(() => (
+        window.__savoriaTest.multiplayer.completionCount
+      ))).toBe(1);
+      const saved = await page.evaluate(() => JSON.parse(
+        localStorage.getItem('savoria3d-save-v4'),
+      ));
+      expect(saved.best['2-1']).toBeGreaterThanOrEqual(1);
+      expect(saved.unlocked).toBe(4);
+    }
+    expect(consoleErrors).toEqual([]);
   } finally {
     await hostContext.close();
     await guestContext.close();
@@ -207,4 +370,74 @@ test('an expired invite returns to room recovery controls', async ({ page }) => 
   await expect(page.getByRole('status')).toContainText('That room expired');
   await expect(page.getByRole('button', { name: 'Create room' })).toBeEnabled();
   await expect(page.getByLabel('Private room code')).toHaveValue('ABC234');
+});
+
+test('guest Escape leaves without pausing, then either chef can fail the recovered team', async ({ browser }) => {
+  const hostContext = await browser.newContext();
+  const guestContext = await browser.newContext();
+  const host = await hostContext.newPage();
+  const guest = await guestContext.newPage();
+  const consoleErrors = [];
+  for (const [label, page] of [['host', host], ['guest', guest]]) {
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(`${label}: ${message.text()}`);
+    });
+    page.on('pageerror', (error) => consoleErrors.push(`${label}: ${error.message}`));
+  }
+
+  try {
+    await host.goto(`${ONLINE_ORIGIN}/play/`);
+    await host.getByRole('button', { name: 'Online Co-op' }).click();
+    await host.getByRole('button', { name: 'Create room' }).click();
+    await expect(host.locator('#app')).toHaveAttribute('data-screen', 'lobby');
+    const roomCode = await host.locator('#lobby-room-code').textContent();
+    expect(roomCode).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/);
+    await guest.goto(`${ONLINE_ORIGIN}/play/?room=${roomCode}`);
+    await guest.getByRole('button', { name: 'Join room' }).click();
+    await host.getByRole('button', { name: 'Ready up' }).click();
+    await guest.getByRole('button', { name: 'Ready up' }).click();
+    await host.getByRole('button', { name: 'Start course' }).click();
+    for (const page of [host, guest]) {
+      await expect(page.locator('canvas[data-multiplayer-course]')).toBeVisible();
+    }
+
+    await guest.keyboard.press('Escape');
+    await expect(guest.locator('#app')).toHaveAttribute('data-screen', 'online');
+    await expect(host.locator('#app')).toHaveAttribute('data-screen', 'lobby');
+    expect(await host.evaluate(() => window.__savoriaTest.multiplayer.view.phase)).toBe('lobby');
+    expect(await host.evaluate(() => (
+      window.__savoriaTest.multiplayer.phaseHistory.at(-1)
+    ))).toBe('lobby');
+
+    await guest.getByRole('button', { name: 'Join room' }).click();
+    await expect(host.locator('.lobby-player')).toHaveCount(2);
+    await host.getByRole('button', { name: 'Ready up' }).click();
+    await guest.getByRole('button', { name: 'Ready up' }).click();
+    await host.getByRole('button', { name: 'Start course' }).click();
+    for (const page of [host, guest]) {
+      await expect(page.locator('canvas[data-multiplayer-course]')).toBeVisible();
+    }
+
+    const guestId = await host.evaluate(() => (
+      window.__savoriaTest.multiplayer.view.players.find(({ isLocal }) => !isLocal).sessionId
+    ));
+    await host.evaluate((playerId) => {
+      window.__savoriaTest.multiplayer.control({
+        action: 'health', playerId, hearts: 1, lives: 1,
+      });
+      window.__savoriaTest.multiplayer.control({ action: 'hazard', playerId });
+    }, guestId);
+
+    for (const page of [host, guest]) {
+      await expect(page.locator('#error-screen')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'The kitchen is closed' })).toBeVisible();
+      await expect.poll(() => page.evaluate(() => (
+        window.__savoriaTest.multiplayer.failureCount
+      ))).toBe(1);
+    }
+    expect(consoleErrors).toEqual([]);
+  } finally {
+    await hostContext.close();
+    await guestContext.close();
+  }
 });

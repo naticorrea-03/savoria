@@ -10,6 +10,7 @@ export const MESSAGE = Object.freeze({
   RESUME: 'resume',
   RECONNECT: 'reconnect',
   LEAVE: 'leave',
+  TEST_CONTROL: 'test-control',
 });
 
 export const ACTION_RATE_LIMIT_PER_SECOND = 12;

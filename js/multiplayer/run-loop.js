@@ -65,6 +65,7 @@ export class MultiplayerRunLoop {
       this.snapToAuthority(view, receivedAt);
       if (
         view.phase === 'paused'
+        && view.pauseReason === 'disconnect'
         && view.isHost
         && view.players.length === 2
         && view.players.every(({ connected }) => connected)

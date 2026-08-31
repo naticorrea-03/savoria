@@ -24,6 +24,7 @@ let testServer;
 before(async () => {
   SavoriaRoom.reconnectionWindowSeconds = TEST_RECONNECTION_SECONDS;
   SavoriaRoom.reconnectHandshakeSeconds = TEST_RECONNECT_HANDSHAKE_SECONDS;
+  SavoriaRoom.browserTestControlsEnabled = true;
   testServer = await boot(createGameServer(), 2568);
 });
 
@@ -34,6 +35,7 @@ afterEach(async () => {
 after(async () => {
   SavoriaRoom.reconnectionWindowSeconds = RECONNECTION_WINDOW_SECONDS;
   SavoriaRoom.reconnectHandshakeSeconds = RECONNECT_HANDSHAKE_SECONDS;
+  SavoriaRoom.browserTestControlsEnabled = false;
   await testServer.shutdown();
 });
 
@@ -71,6 +73,8 @@ test('room state exposes the complete lobby contract and rejects a third player'
   assert.equal(state.authoritativeTick, 0);
   assert.equal(state.players.size, 2);
   assert.ok(state.checkpoint);
+  assert.ok(state.goal);
+  assert.ok(state.completion);
   assert.ok(state.enemies);
   assert.ok(state.projectiles);
   assert.ok(state.collectibles);
@@ -192,6 +196,10 @@ test('ready, course selection, and start enforce payloads, host authority, and u
   assert.equal(serverRoom.locked, true);
   assert.equal(serverRoom.courseState.players[host.sessionId].characterId, 'fatsio');
   assert.equal(serverRoom.courseState.players[guest.sessionId].characterId, 'chefno');
+  assert.equal(serverRoom.state.players.get(host.sessionId).hearts, 3);
+  assert.equal(serverRoom.state.players.get(host.sessionId).lives, 4);
+  assert.equal(serverRoom.state.players.get(guest.sessionId).hearts, 3);
+  assert.equal(serverRoom.state.players.get(guest.sessionId).lives, 4);
   assert.equal(serverRoom.state.timer, 240);
   await assert.rejects(joinClient(host.roomId), /locked|seat|matchmake/i);
   await guest.leave();
@@ -286,6 +294,101 @@ test('pause and resume freeze and restart the shared timer', async () => {
   await guest.leave();
 });
 
+test('only the host can resume the globally paused course', async () => {
+  const { host, guest, serverRoom } = await createStartedRoom();
+
+  await host.request(MESSAGE.PAUSE, {});
+  await assert.rejects(guest.request(MESSAGE.RESUME, {}), /host/i);
+  assert.equal(serverRoom.state.phase, 'paused');
+  assert.deepEqual(await host.request(MESSAGE.RESUME, {}), { ok: true });
+  assert.equal(serverRoom.state.phase, 'playing');
+});
+
+test('authoritative completion exposes shared progress once after both chefs reach the goal', async () => {
+  const { host, guest, serverRoom } = await createStartedRoom();
+  const goal = serverRoom.courseState.goal.position;
+  const hostPlayer = serverRoom.courseState.players[host.sessionId];
+  const guestPlayer = serverRoom.courseState.players[guest.sessionId];
+  Object.assign(hostPlayer, { positionX: goal[0], positionY: goal[1], hearts: 2 });
+  Object.assign(guestPlayer, { positionX: goal[0], positionY: goal[1], hearts: 3 });
+  serverRoom.courseState.tomatoCount = Math.ceil(
+    serverRoom.courseState.collectibles.filter(({ kind }) => kind === 'tomato').length * 0.6,
+  );
+
+  serverRoom.stepAuthoritativeSimulation(1 / 60);
+  const completedTick = serverRoom.state.authoritativeTick;
+
+  assert.equal(serverRoom.state.phase, 'completed');
+  assert.equal(serverRoom.state.goal.reachedPlayerIds.length, 2);
+  assert.equal(serverRoom.state.players.get(host.sessionId).safe, true);
+  assert.equal(serverRoom.state.players.get(guest.sessionId).safe, true);
+  assert.equal(serverRoom.state.completion.present, true);
+  assert.equal(serverRoom.state.completion.levelId, '1-1');
+  assert.equal(serverRoom.state.completion.stars, 3);
+
+  serverRoom.stepAuthoritativeSimulation(1);
+  assert.equal(serverRoom.state.authoritativeTick, completedTick);
+  assert.equal(serverRoom.state.completion.present, true);
+  assert.deepEqual(await host.request(MESSAGE.INPUT, {
+    axis: 0,
+    running: false,
+    jumpPressed: false,
+    jumpHeld: false,
+  }), { ok: false });
+});
+
+test('either chef losing the final life publishes one team failure', async () => {
+  const { host, guest, serverRoom } = await createStartedRoom();
+  const player = serverRoom.courseState.players[guest.sessionId];
+  player.hearts = 1;
+  player.lives = 1;
+  player.positionY = serverRoom.courseState.level.killY - 1;
+
+  serverRoom.stepAuthoritativeSimulation(1 / 60);
+
+  assert.equal(serverRoom.state.phase, 'failed');
+  assert.equal(serverRoom.state.failureReason, 'lives');
+  assert.equal(serverRoom.state.failedPlayerId, guest.sessionId);
+  assert.equal(serverRoom.state.players.get(guest.sessionId).active, false);
+  assert.equal(serverRoom.state.players.get(host.sessionId).active, true);
+});
+
+test('browser controls drive real authoritative pickups, checkpoints, respawns, and goals', async () => {
+  const { host, guest, serverRoom } = await createStartedRoom();
+  const tomato = serverRoom.courseState.collectibles.find(({ kind }) => kind === 'tomato');
+  const basil = serverRoom.courseState.collectibles.find(({ type }) => type === 'basil');
+
+  assert.deepEqual(await host.request('test-control', {
+    action: 'health', playerId: guest.sessionId, hearts: 2, lives: 4,
+  }), { ok: true });
+  assert.deepEqual(await host.request('test-control', {
+    action: 'collectible', playerId: host.sessionId, targetId: tomato.id,
+  }), { ok: true });
+  assert.deepEqual(await host.request('test-control', {
+    action: 'collectible', playerId: guest.sessionId, targetId: basil.id,
+  }), { ok: true });
+  await waitUntil(() => tomato.takenBy === host.sessionId && basil.takenBy === guest.sessionId);
+  assert.ok(serverRoom.courseState.tomatoCount >= 1);
+  assert.equal(serverRoom.courseState.players[guest.sessionId].hearts, 3);
+
+  await host.request('test-control', { action: 'checkpoint', playerId: host.sessionId });
+  await waitUntil(() => serverRoom.courseState.checkpoint.active);
+  await host.request('test-control', {
+    action: 'health', playerId: guest.sessionId, hearts: 1, lives: 4,
+  });
+  await host.request('test-control', { action: 'hazard', playerId: guest.sessionId });
+  await waitUntil(() => serverRoom.courseState.players[guest.sessionId].lives === 3);
+  assert.equal(serverRoom.courseState.players[guest.sessionId].positionX, 56.1);
+  assert.equal(serverRoom.courseState.players[host.sessionId].lives, 4);
+
+  await host.request('test-control', { action: 'goal', playerId: host.sessionId });
+  await waitUntil(() => serverRoom.courseState.players[host.sessionId].safe);
+  assert.equal(serverRoom.state.phase, 'playing');
+  await host.request('test-control', { action: 'goal', playerId: guest.sessionId });
+  await waitUntil(() => serverRoom.state.phase === 'completed');
+  assert.equal(serverRoom.state.completion.present, true);
+});
+
 test('alternating action types share one per-client rate limit', async () => {
   const host = await createClient();
   for (let index = 0; index < ACTION_RATE_LIMIT_PER_SECOND; index += 1) {
@@ -329,7 +432,7 @@ test('disconnect pauses immediately and reconnect restores the same player state
   assert.equal(serverRoom.state.players.get(playerId).connected, true);
   assert.equal(serverRoom.state.players.get(playerId).positionX, positionX);
   assert.equal(serverRoom.state.phase, 'paused');
-  await guest.request(MESSAGE.RESUME, {});
+  await reconnected.request(MESSAGE.RESUME, {});
   assert.equal(serverRoom.state.phase, 'playing');
   await new Promise((resolve) => {
     setTimeout(resolve, TEST_RECONNECT_HANDSHAKE_SECONDS * 1000 + 25);
@@ -366,6 +469,25 @@ test('leave message promotes a lobby host and an empty expired room disposes', a
   await dropClient(solo);
   await waitUntil(() => testServer.getRoomById(soloRoomId) === undefined, 2500);
   assert.equal(testServer.getRoomById(soloRoomId), undefined);
+});
+
+test('a guest leaving active play returns the connected host to the lobby', async () => {
+  const { host, guest, serverRoom } = await createStartedRoom();
+
+  guest.send(MESSAGE.LEAVE, {});
+  await waitUntil(() => serverRoom.state.players.has(guest.sessionId) === false);
+  await waitUntil(() => serverRoom.state.phase === 'lobby');
+
+  assert.equal(serverRoom.state.players.has(host.sessionId), true);
+  assert.equal(serverRoom.state.hostPlayerId, host.sessionId);
+  assert.equal(serverRoom.courseState, null);
+  assert.equal(host.connection.isOpen, true);
+  assert.deepEqual(await host.request(MESSAGE.INPUT, {
+    axis: 0,
+    running: false,
+    jumpPressed: false,
+    jumpHeld: false,
+  }), { ok: false });
 });
 
 test('host promotion resets a selected course the survivor has not unlocked', async () => {

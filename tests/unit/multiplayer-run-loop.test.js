@@ -9,9 +9,11 @@ function view({
   remoteX = 8,
   phase = 'playing',
   isHost = true,
+  pauseReason = '',
 } = {}) {
   return {
     phase,
+    pauseReason,
     isHost,
     authoritativeTick: tick,
     players: [
@@ -141,8 +143,8 @@ test('only the host requests one automatic resume after both players reconnect',
     sendInput: () => {},
     requestResume: () => { guestResumes += 1; },
   });
-  const hostPaused = view({ tick: 2, phase: 'paused', isHost: true });
-  const guestPaused = view({ tick: 2, phase: 'paused', isHost: false });
+  const hostPaused = view({ tick: 2, phase: 'paused', isHost: true, pauseReason: 'disconnect' });
+  const guestPaused = view({ tick: 2, phase: 'paused', isHost: false, pauseReason: 'disconnect' });
 
   hostLoop.updateState(hostPaused, 1_000);
   guestLoop.updateState(guestPaused, 1_000);
@@ -151,6 +153,24 @@ test('only the host requests one automatic resume after both players reconnect',
 
   assert.equal(hostResumes, 1);
   assert.equal(guestResumes, 0);
+});
+
+test('a deliberate host pause stays paused until the host resumes it', () => {
+  let resumes = 0;
+  const loop = new MultiplayerRunLoop({
+    sendInput: () => {},
+    requestResume: () => { resumes += 1; },
+  });
+
+  loop.updateState(view({
+    tick: 2,
+    phase: 'paused',
+    isHost: true,
+    pauseReason: 'host',
+  }), 1_000);
+
+  assert.equal(resumes, 0);
+  assert.equal(loop.authorityPlaying, false);
 });
 
 test('pause snaps to authority and discards in-flight prediction before clean resume', () => {

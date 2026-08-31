@@ -15,7 +15,7 @@ export default defineConfig({
     },
     {
       command: 'node server/index.js',
-      env: { HOST: '127.0.0.1', PORT: '2567' },
+      env: { HOST: '127.0.0.1', PORT: '2567', SAVORIA_BROWSER_TESTS: '1' },
       port: 2567,
       reuseExistingServer: !process.env.CI,
     },

@@ -22,6 +22,7 @@ import {
   REMOTE_INTERPOLATION_MS,
 } from '../multiplayer/netcode.js';
 import { MultiplayerRunLoop } from '../multiplayer/run-loop.js';
+import { MultiplayerCourseRenderer } from '../multiplayer/course-renderer.js';
 import {
   RELEASED_LEVELS,
   RELEASED_WORLDS,
@@ -63,6 +64,11 @@ let autoResumeRequestCount = 0;
 let multiplayerPhaseHistory = [];
 let multiplayerRunLoop = null;
 let multiplayerPresentation = null;
+let multiplayerCourseRenderer = null;
+let multiplayerCourseLoadId = 0;
+let multiplayerCompletionCount = 0;
+let multiplayerFailureCount = 0;
+let handledMultiplayerOutcome = null;
 
 function dispatch(event) {
   const previous = uiState;
@@ -316,7 +322,7 @@ function openOnline() {
 }
 
 function openHome() {
-  stopMultiplayerRunLoop();
+  stopMultiplayerCourse();
   $('online-screen').classList.add('hidden');
   $('lobby-screen').classList.add('hidden');
   const url = new URL(location.href);
@@ -385,12 +391,26 @@ function renderLobby(view) {
   if (multiplayerRunLoop && app.dataset.screen === 'online-course') {
     multiplayerRunLoop.updateState(view, performance.now());
     if (view.phase === 'paused') {
-      $('multiplayer-course-status').textContent = view.players.every(({ connected }) => connected)
-        ? 'Both chefs reconnected. Resuming course.'
-        : 'Waiting for the other chef to reconnect.';
+      if (view.pauseReason === 'host') {
+        $('multiplayer-course-status').textContent = view.isHost
+          ? 'Course paused. Press Escape to resume.'
+          : 'The host paused the course.';
+      } else {
+        $('multiplayer-course-status').textContent = view.players.every(({ connected }) => connected)
+          ? 'Both chefs reconnected. Resuming course.'
+          : 'Waiting for the other chef to reconnect.';
+      }
       return;
     }
-    stopMultiplayerRunLoop();
+    if (view.phase === 'completed') {
+      completeMultiplayerCourse(view);
+      return;
+    }
+    if (view.phase === 'failed') {
+      failMultiplayerCourse(view);
+      return;
+    }
+    stopMultiplayerCourse();
     if (view.phase === 'lobby') setMultiplayerScreen('lobby');
   }
   const players = $('lobby-players');
@@ -449,20 +469,21 @@ function enterMultiplayerCourse(view) {
   multiplayerRunLoop.updateState(view, performance.now());
   $('multiplayer-course-code').textContent = multiplayerClient?.roomCode ?? '------';
   if (app.dataset.screen !== 'online-course') {
+    handledMultiplayerOutcome = null;
     setMultiplayerScreen('online-course');
     multiplayerRunLoop.start();
+    void loadMultiplayerCourse(view);
   }
 }
 
 function renderMultiplayerPresentation(presentation) {
   multiplayerPresentation = presentation;
-  const camera = presentation.cameraTarget ?? { x: 0, y: 0, z: 0 };
   const container = $('multiplayer-course-players');
   const existing = new Map(
     [...container.children].map((marker) => [marker.dataset.multiplayerPlayer, marker]),
   );
   const activeIds = new Set();
-  presentation.players.forEach((player, index) => {
+  presentation.players.forEach((player) => {
     activeIds.add(player.sessionId);
     let marker = existing.get(player.sessionId);
     if (!marker) {
@@ -470,41 +491,122 @@ function renderMultiplayerPresentation(presentation) {
       marker.dataset.multiplayerPlayer = player.sessionId;
       const image = document.createElement('img');
       image.alt = '';
+      const copy = document.createElement('div');
       const name = document.createElement('strong');
-      marker.append(image, name);
+      const stats = document.createElement('span');
+      copy.append(name, stats);
+      marker.append(image, copy);
       container.append(marker);
     }
     marker.className = `multiplayer-course-player${player.isLocal ? ' is-local' : ''}`;
     marker.dataset.characterId = player.characterId;
     marker.style.setProperty('--player-color', player.color);
-    marker.style.setProperty('--player-x', `${Math.max(8, Math.min(92, 50 + (player.position.x - camera.x) * 4))}%`);
-    marker.style.setProperty('--player-y', `${Math.max(12, Math.min(72, 20 + player.position.y * 5))}%`);
-    marker.style.setProperty(
-      '--player-offset',
-      `${(index - (presentation.players.length - 1) / 2) * 90}px`,
-    );
     marker.setAttribute('aria-label', `${player.guestName}${player.isLocal ? ', you' : ''}`);
     const character = CHARACTERS.find(({ id }) => id === player.characterId);
     const image = marker.querySelector('img');
     image.src = character?.img ?? CHARACTERS[0].img;
     marker.querySelector('strong').textContent = player.guestName;
+    marker.querySelector('span').textContent = `${'❤️'.repeat(player.hearts)} · ${player.lives} lives${player.power ? ` · ${player.power.type} ${Math.ceil(player.power.seconds)}s` : ''}`;
     container.append(marker);
   });
   for (const [sessionId, marker] of existing) {
     if (!activeIds.has(sessionId)) marker.remove();
   }
-  $('multiplayer-course-stage').style.setProperty('--camera-x', `${camera.x}`);
+  $('multiplayer-tomato-count').textContent = String(lobbyView?.tomatoCount ?? 0);
+  $('multiplayer-timer').textContent = formatTime(lobbyView?.timer ?? 0);
+  multiplayerCourseRenderer?.render(presentation, lobbyView, performance.now());
 }
 
-function stopMultiplayerRunLoop() {
+async function loadMultiplayerCourse(view) {
+  const definition = RELEASED_LEVELS.find(({ id }) => id === view.selectedLevelId);
+  if (!definition || !hasWebGL()) {
+    $('multiplayer-course-status').textContent = 'This browser cannot render the course.';
+    return;
+  }
+  const loadId = ++multiplayerCourseLoadId;
+  const level = buildReleasedLevel(definition);
+  const textures = createTextureStore({
+    THREE,
+    loader: new THREE.TextureLoader(),
+    baseUrl: document.baseURI,
+  });
+  const characterAssets = [...new Set(view.players.map(({ characterId }) => (
+    chefSpriteConfig(characterId).path
+  )))];
+  try {
+    await textures.preload([
+      ...collectVisualAssets(level.theme.visuals),
+      ...characterAssets,
+    ]);
+  } catch (error) {
+    textures.dispose();
+    if (loadId === multiplayerCourseLoadId) {
+      $('multiplayer-course-status').textContent = `Could not load ${failedAssetName(error)}.`;
+    }
+    return;
+  }
+  if (loadId !== multiplayerCourseLoadId || app.dataset.screen !== 'online-course') {
+    textures.dispose();
+    return;
+  }
+  multiplayerCourseRenderer?.destroy();
+  multiplayerCourseRenderer = new MultiplayerCourseRenderer({
+    container: $('multiplayer-course-stage'),
+    level,
+    textures,
+  });
+  $('multiplayer-course-title').textContent = `${definition.id} ${definition.name}`;
+  $('multiplayer-course-status').textContent = view.isHost
+    ? 'Course connected. Escape pauses for both chefs.'
+    : 'Course connected. Escape leaves the room.';
+  if (multiplayerPresentation) {
+    multiplayerCourseRenderer.render(multiplayerPresentation, lobbyView, performance.now());
+  }
+}
+
+function completeMultiplayerCourse(view) {
+  const outcome = `completed:${multiplayerClient?.roomCode}:${view.completion?.levelId}`;
+  if (handledMultiplayerOutcome === outcome || !view.completion) return;
+  handledMultiplayerOutcome = outcome;
+  multiplayerCompletionCount += 1;
+  const local = view.players.find(({ isLocal }) => isLocal);
+  $('online-course-screen').classList.add('hidden');
+  stopMultiplayerCourse();
+  dispatch({
+    type: 'COURSE_COMPLETE',
+    levelId: view.completion.levelId,
+    stars: view.completion.stars,
+    stats: {
+      coins: view.completion.tomatoCount,
+      totalCoins: view.completion.totalTomatoes,
+      time: Math.round(view.completion.elapsed),
+      hearts: local?.hearts ?? 0,
+    },
+  });
+}
+
+function failMultiplayerCourse(view) {
+  const outcome = `failed:${multiplayerClient?.roomCode}:${view.authoritativeTick}`;
+  if (handledMultiplayerOutcome === outcome) return;
+  handledMultiplayerOutcome = outcome;
+  multiplayerFailureCount += 1;
+  $('online-course-screen').classList.add('hidden');
+  stopMultiplayerCourse();
+  dispatch({ type: 'GAME_OVER' });
+}
+
+function stopMultiplayerCourse() {
+  multiplayerCourseLoadId += 1;
   multiplayerRunLoop?.stop();
   multiplayerRunLoop = null;
   multiplayerPresentation = null;
+  multiplayerCourseRenderer?.destroy();
+  multiplayerCourseRenderer = null;
 }
 
 function handleMultiplayerStatus(status) {
   if (status.kind === 'expired') {
-    stopMultiplayerRunLoop();
+    stopMultiplayerCourse();
     setOnlineStatus(status.message, status.kind);
     openOnline();
     return;
@@ -555,7 +657,7 @@ async function connectMultiplayer(mode) {
 }
 
 async function leaveLobby() {
-  stopMultiplayerRunLoop();
+  stopMultiplayerCourse();
   await multiplayerClient?.leave();
   multiplayerClient = null;
   lobbyView = null;
@@ -681,6 +783,14 @@ addEventListener('keydown', (event) => {
   if (uiState.screen === 'playing' && movementCodes.has(event.code)) {
     dispatch({ type: 'MOVEMENT_USED' });
   }
+  if (app.dataset.screen === 'online-course' && event.code === 'Escape' && !event.repeat) {
+    event.preventDefault();
+    if (lobbyView?.isHost) {
+      if (lobbyView.phase === 'paused') multiplayerClient?.resume();
+      else multiplayerClient?.pause();
+    }
+    else void leaveLobby();
+  }
 });
 
 addEventListener('blur', () => {
@@ -716,6 +826,13 @@ window.__savoriaTest = {
     get pendingInputCount() { return multiplayerRunLoop?.pendingInputCount ?? 0; },
     get authorityPlaying() { return multiplayerRunLoop?.authorityPlaying ?? false; },
     get presentation() { return multiplayerPresentation; },
+    get completionCount() { return multiplayerCompletionCount; },
+    get failureCount() { return multiplayerFailureCount; },
+    get renderedPlayerCount() { return multiplayerCourseRenderer?.playerVisuals.size ?? 0; },
+    get hasCourseCanvas() { return Boolean(multiplayerCourseRenderer?.renderer.domElement.isConnected); },
+    control(payload) { multiplayerClient?.testControl(payload); },
+    drop() { multiplayerClient?.dropForTest(); },
+    reconnect() { return multiplayerClient?.reconnectForTest(); },
     timing: {
       remoteInterpolationMs: REMOTE_INTERPOLATION_MS,
       localCorrectionMs: LOCAL_CORRECTION_MS,

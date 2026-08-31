@@ -75,6 +75,23 @@ export const CheckpointState = schema({
   positionZ: t.number(),
 }, 'SavoriaCheckpointState');
 
+export const GoalState = schema({
+  present: t.boolean(),
+  positionX: t.number(),
+  positionY: t.number(),
+  positionZ: t.number(),
+  reachedPlayerIds: t.array('string'),
+}, 'SavoriaGoalState');
+
+export const CompletionState = schema({
+  present: t.boolean(),
+  levelId: t.string(),
+  tomatoCount: t.uint16(),
+  totalTomatoes: t.uint16(),
+  elapsed: t.number(),
+  stars: t.uint8(),
+}, 'SavoriaCompletionState');
+
 export const BossState = schema({
   present: t.boolean(),
   positionX: t.number(),
@@ -90,6 +107,9 @@ export const BossState = schema({
 
 export const RoomState = schema({
   phase: t.string(),
+  pauseReason: t.string(),
+  failureReason: t.string(),
+  failedPlayerId: t.string(),
   protocolVersion: t.uint8(),
   hostPlayerId: t.string(),
   selectedLevelId: t.string(),
@@ -97,6 +117,8 @@ export const RoomState = schema({
   timer: t.number(),
   tomatoCount: t.uint16(),
   checkpoint: CheckpointState,
+  goal: GoalState,
+  completion: CompletionState,
   players: t.map(PlayerState),
   enemies: t.array(EnemyState),
   projectiles: t.array(ProjectileState),
@@ -108,6 +130,9 @@ export const RoomState = schema({
 export function createLobbyState(protocolVersion, selectedLevelId) {
   const state = new RoomState();
   state.phase = 'lobby';
+  state.pauseReason = '';
+  state.failureReason = '';
+  state.failedPlayerId = '';
   state.protocolVersion = protocolVersion;
   state.hostPlayerId = '';
   state.selectedLevelId = selectedLevelId;
@@ -115,6 +140,8 @@ export function createLobbyState(protocolVersion, selectedLevelId) {
   state.timer = 0;
   state.tomatoCount = 0;
   resetCheckpoint(state.checkpoint);
+  resetGoal(state.goal);
+  resetCompletion(state.completion);
   resetBoss(state.boss);
   return state;
 }
@@ -138,10 +165,14 @@ export function createLobbyPlayer(
 }
 
 export function applySimulationSnapshot(state, snapshot) {
+  state.failureReason = snapshot.failureReason ?? '';
+  state.failedPlayerId = snapshot.failedPlayerId ?? '';
   state.authoritativeTick = snapshot.tick;
   state.timer = snapshot.timer;
   state.tomatoCount = snapshot.tomatoCount;
   applyCheckpoint(state.checkpoint, snapshot.checkpoint);
+  applyGoal(state.goal, snapshot.goal);
+  applyCompletion(state.completion, snapshot.completion);
   applyBoss(state.boss, snapshot.boss);
 
   for (const [playerId, simulationPlayer] of Object.entries(snapshot.players)) {
@@ -198,7 +229,12 @@ export function resetCourseState(state) {
   state.authoritativeTick = 0;
   state.timer = 0;
   state.tomatoCount = 0;
+  state.failureReason = '';
+  state.failedPlayerId = '';
+  state.pauseReason = '';
   resetCheckpoint(state.checkpoint);
+  resetGoal(state.goal);
+  resetCompletion(state.completion);
   resetBoss(state.boss);
   state.enemies.splice(0, state.enemies.length);
   state.projectiles.splice(0, state.projectiles.length);
@@ -238,6 +274,44 @@ function applyCheckpoint(target, checkpoint) {
   target.positionX = checkpoint.position[0];
   target.positionY = checkpoint.position[1];
   target.positionZ = checkpoint.position[2];
+}
+
+function applyGoal(target, goal) {
+  resetGoal(target);
+  if (!goal) return;
+  target.present = true;
+  target.positionX = goal.position[0];
+  target.positionY = goal.position[1];
+  target.positionZ = goal.position[2];
+  for (const playerId of goal.reachedPlayerIds ?? []) target.reachedPlayerIds.push(playerId);
+}
+
+function resetGoal(goal) {
+  goal.present = false;
+  goal.positionX = 0;
+  goal.positionY = 0;
+  goal.positionZ = 0;
+  goal.reachedPlayerIds.splice(0, goal.reachedPlayerIds.length);
+}
+
+function applyCompletion(target, completion) {
+  resetCompletion(target);
+  if (!completion) return;
+  target.present = true;
+  target.levelId = completion.levelId;
+  target.tomatoCount = completion.tomatoCount;
+  target.totalTomatoes = completion.totalTomatoes;
+  target.elapsed = completion.elapsed;
+  target.stars = completion.stars;
+}
+
+function resetCompletion(completion) {
+  completion.present = false;
+  completion.levelId = '';
+  completion.tomatoCount = 0;
+  completion.totalTomatoes = 0;
+  completion.elapsed = 0;
+  completion.stars = 0;
 }
 
 function resetCheckpoint(checkpoint) {

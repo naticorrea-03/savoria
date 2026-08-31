@@ -45,6 +45,7 @@ const NEUTRAL_INPUT = Object.freeze({
 export class SavoriaRoom extends Room {
   static reconnectionWindowSeconds = RECONNECTION_WINDOW_SECONDS;
   static reconnectHandshakeSeconds = RECONNECT_HANDSHAKE_SECONDS;
+  static browserTestControlsEnabled = process.env.SAVORIA_BROWSER_TESTS === '1';
 
   courseState = null;
   latestInputs = new Map();
@@ -108,6 +109,7 @@ export class SavoriaRoom extends Room {
     this.latestInputs.set(client.sessionId, { ...NEUTRAL_INPUT });
     if (this.courseState && this.state.phase === 'playing') {
       this.state.phase = 'paused';
+      this.state.pauseReason = 'disconnect';
     }
     this.allowReconnection(client, this.constructor.reconnectionWindowSeconds);
   }
@@ -201,8 +203,7 @@ export class SavoriaRoom extends Room {
       this.consumeMessage(client.sessionId, 'input', INPUT_RATE_LIMIT_PER_SECOND);
       if (!isValidInput(payload)) throw applicationError('Invalid input message');
       this.requirePlayer(client.sessionId);
-      if (this.state.phase === 'paused') return { ok: false };
-      if (this.state.phase !== 'playing') throw applicationError('Input requires active play');
+      if (this.state.phase !== 'playing') return { ok: false };
       const player = this.state.players.get(client.sessionId);
       this.latestInputs.set(client.sessionId, { ...payload });
       player.acceptedInputCount += 1;
@@ -218,6 +219,7 @@ export class SavoriaRoom extends Room {
       }
       if (this.state.phase !== 'playing') throw applicationError('Pause requires active play');
       this.state.phase = 'paused';
+      this.state.pauseReason = 'host';
       return { ok: true };
     });
 
@@ -225,6 +227,9 @@ export class SavoriaRoom extends Room {
       this.consumeMessage(client.sessionId, 'action', ACTION_RATE_LIMIT_PER_SECOND);
       assertEmptyPayload(payload, 'resume');
       this.requirePlayer(client.sessionId);
+      if (client.sessionId !== this.state.hostPlayerId) {
+        throw applicationError('Only the host can resume');
+      }
       if (this.state.phase !== 'paused' || !this.courseState) {
         throw applicationError('Resume requires a paused course');
       }
@@ -232,6 +237,7 @@ export class SavoriaRoom extends Room {
         throw applicationError('Every player must reconnect before resuming');
       }
       this.state.phase = 'playing';
+      this.state.pauseReason = '';
       this.courseState.phase = 'playing';
       return { ok: true };
     });
@@ -266,6 +272,69 @@ export class SavoriaRoom extends Room {
       client.leave(CloseCode.CONSENTED);
       return { ok: true };
     });
+
+    if (this.constructor.browserTestControlsEnabled) {
+      this.onMessage(MESSAGE.TEST_CONTROL, (client, payload) => (
+        this.applyBrowserTestControl(client, payload)
+      ));
+    }
+  }
+
+  applyBrowserTestControl(client, payload) {
+    if (client.sessionId !== this.state.hostPlayerId) {
+      throw applicationError('Only the host can control browser tests');
+    }
+    if (!this.courseState || this.state.phase !== 'playing') {
+      throw applicationError('Browser test control requires active play');
+    }
+    const playerId = payload?.playerId;
+    const player = this.courseState.players[playerId];
+    if (!player) throw applicationError('Unknown browser test player');
+
+    if (payload.action === 'health') {
+      if (!hasExactKeys(payload, ['action', 'playerId', 'hearts', 'lives'])
+        || !Number.isInteger(payload.hearts)
+        || payload.hearts < 1
+        || payload.hearts > 5
+        || !Number.isInteger(payload.lives)
+        || payload.lives < 1
+        || payload.lives > 4) {
+        throw applicationError('Invalid browser health control');
+      }
+      player.hearts = payload.hearts;
+      player.lives = payload.lives;
+      player.active = true;
+      player.invulnerabilitySeconds = 0;
+      return { ok: true };
+    }
+
+    if (payload.action === 'collectible') {
+      if (!hasExactKeys(payload, ['action', 'playerId', 'targetId'])) {
+        throw applicationError('Invalid browser collectible control');
+      }
+      const collectible = this.courseState.collectibles.find(({ id }) => id === payload.targetId);
+      if (!collectible || collectible.takenBy) {
+        throw applicationError('Unknown available browser collectible');
+      }
+      snapPlayer(player, collectible.position);
+      this.latestInputs.set(playerId, { ...NEUTRAL_INPUT });
+      return { ok: true };
+    }
+
+    if (!hasExactKeys(payload, ['action', 'playerId'])) {
+      throw applicationError('Invalid browser test control');
+    }
+    if (payload.action === 'checkpoint' && this.courseState.checkpoint) {
+      snapPlayer(player, this.courseState.checkpoint.position);
+    } else if (payload.action === 'hazard' && this.courseState.hazards[0]) {
+      snapPlayer(player, this.courseState.hazards[0].position);
+    } else if (payload.action === 'goal' && this.courseState.goal) {
+      snapPlayer(player, this.courseState.goal.position);
+    } else {
+      throw applicationError('Unavailable browser test control');
+    }
+    this.latestInputs.set(playerId, { ...NEUTRAL_INPUT });
+    return { ok: true };
   }
 
   async startCourse() {
@@ -282,6 +351,7 @@ export class SavoriaRoom extends Room {
     });
     for (const player of this.state.players.values()) player.acceptedInputCount = 0;
     this.state.phase = 'playing';
+    this.state.pauseReason = '';
     applySimulationSnapshot(this.state, createCourseSnapshot(this.courseState));
     await this.lock();
   }
@@ -299,6 +369,7 @@ export class SavoriaRoom extends Room {
   async cancelCourseToLobby() {
     this.courseState = null;
     this.state.phase = 'lobby';
+    this.state.pauseReason = '';
     resetCourseState(this.state);
     await this.unlock();
   }
@@ -407,6 +478,20 @@ function firstConnectedPlayerId(players) {
     .filter((player) => player.connected)
     .map((player) => player.playerId)
     .sort()[0] ?? '';
+}
+
+function snapPlayer(player, position) {
+  player.positionX = position[0];
+  player.positionY = position[1];
+  player.positionZ = position[2];
+  player.velocityX = 0;
+  player.velocityY = 0;
+  player.velocityZ = 0;
+  player.grounded = false;
+  player.coyote = 0;
+  player.jumpBuffer = 0;
+  player.groundMoverId = null;
+  player.invulnerabilitySeconds = 0;
 }
 
 function applicationError(message) {

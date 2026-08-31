@@ -6,6 +6,14 @@ const FIXED_STEP_SECONDS = 1 / 60;
 
 export { applyPlayerInput, createPlayerState } from './player-state.js';
 
+export function calculateCoopStars({ tomatoCount, totalTomatoes, players }) {
+  const tomatoPercent = totalTomatoes > 0 ? tomatoCount / totalTomatoes : 1;
+  const survivors = Object.values(players ?? {});
+  const survivalStar = survivors.length > 0
+    && survivors.every((player) => player.hearts >= 2);
+  return 1 + (tomatoPercent >= 0.6 ? 1 : 0) + (survivalStar ? 1 : 0);
+}
+
 export function createCourseSimulation({ level, seed, players }) {
   const state = {
     phase: 'playing',
@@ -181,12 +189,13 @@ function stepFixed(state, inputsByPlayer, seconds, acceptJumpPress) {
       0,
       player.invulnerabilitySeconds - seconds,
     );
+    updateTimedPower(player, seconds);
     if (!player.active || player.safe) continue;
     const input = inputsByPlayer[playerId] ?? {};
     state.players[playerId] = applyPlayerInput(
       player,
       acceptJumpPress ? input : { ...input, jumpPressed: false },
-      state.world,
+      playerWorld(state.world, player),
       seconds,
     );
   }
@@ -303,6 +312,19 @@ function updateProjectiles(state, seconds) {
         && projectile.positionY > aabb.minY
         && projectile.positionY < aabb.maxY
       ));
+    if (projectile.dead) continue;
+    const hit = Object.values(state.players)
+      .filter((player) => player.active && !player.safe)
+      .sort((left, right) => left.playerId.localeCompare(right.playerId))
+      .find((player) => distanceToPosition(player, [
+        projectile.positionX,
+        projectile.positionY,
+        projectile.positionZ,
+      ]) < 1);
+    if (hit) {
+      projectile.dead = true;
+      damagePlayer(state, hit);
+    }
   }
   state.projectiles = state.projectiles.filter((projectile) => !projectile.dead);
 }
@@ -344,7 +366,7 @@ function updateCourseLandmarks(state) {
       player.invulnerabilitySeconds <= 0
       && state.hazards.some((hazard) => playerCollider.intersects(hazard.aabb))
     ) {
-      loseLifeAndRespawn(state, player);
+      damagePlayer(state, player);
       if (state.phase === 'failed') return;
       continue;
     }
@@ -377,17 +399,62 @@ function updateCourseLandmarks(state) {
         lives: player.lives,
       }])),
     };
+    state.completion.stars = calculateCoopStars(state.completion);
   }
+}
+
+function updateTimedPower(player, seconds) {
+  if (!player.power) return;
+  player.power.seconds = Math.max(0, player.power.seconds - seconds);
+  if (player.power.seconds <= 0) delete player.power;
+}
+
+function playerWorld(world, player) {
+  if (!player.power || !['speed', 'boost'].includes(player.power.type)) return world;
+  return {
+    ...world,
+    motion: player.power.type === 'speed'
+      ? { walkSpeed: 7.2 * 1.55, runSpeed: 10.6 * 1.55 }
+      : { jumpSpeed: 12.5 * 1.28 },
+  };
+}
+
+function damagePlayer(state, player) {
+  if (player.power?.type === 'shield' || player.invulnerabilitySeconds > 0) return false;
+  player.hearts -= 1;
+  if (player.hearts <= 0) {
+    player.lives -= 1;
+    if (player.lives <= 0) {
+      player.hearts = 0;
+      player.active = false;
+      state.phase = 'failed';
+      state.failureReason = 'lives';
+      state.failedPlayerId = player.playerId;
+      return true;
+    }
+    player.hearts = 3;
+    respawnPlayer(state, player);
+    return true;
+  }
+  player.invulnerabilitySeconds = 1.6;
+  return true;
 }
 
 function loseLifeAndRespawn(state, player) {
   player.lives -= 1;
   if (player.lives <= 0) {
+    player.hearts = 0;
     player.active = false;
     state.phase = 'failed';
+    state.failureReason = 'lives';
     state.failedPlayerId = player.playerId;
     return;
   }
+  player.hearts = 3;
+  respawnPlayer(state, player);
+}
+
+function respawnPlayer(state, player) {
   const spawn = state.checkpoint?.active
     ? state.checkpoint.position
     : state.level.spawn;
