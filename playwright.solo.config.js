@@ -12,7 +12,7 @@ export default defineConfig({
     command: 'python3 serve.py',
     port: 8980,
     env: { PORT: '8980', SAVORIA_BROWSER_TESTS: '0' },
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
   },
   reporter: process.env.CI ? 'github' : 'list',
 });
