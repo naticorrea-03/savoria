@@ -1,6 +1,20 @@
 import { expect, test } from '@playwright/test';
 
 const ONLINE_ORIGIN = 'http://127.0.0.1:2567';
+const PRODUCTION_ORIGIN = 'http://127.0.0.1:8978';
+
+test('production mode excludes browser test mutation hooks', async ({ page }) => {
+  await page.goto(`${PRODUCTION_ORIGIN}/play/`);
+  const hooks = await page.evaluate(() => {
+    const multiplayer = window.__savoriaTest.multiplayer;
+    return {
+      control: typeof multiplayer.control,
+      drop: typeof multiplayer.drop,
+      reconnect: typeof multiplayer.reconnect,
+    };
+  });
+  expect(hooks).toEqual({ control: 'undefined', drop: 'undefined', reconnect: 'undefined' });
+});
 
 test('invite links open accessible online controls while solo stays network-free', async ({ page }) => {
   const sockets = [];

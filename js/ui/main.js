@@ -23,6 +23,7 @@ import {
 } from '../multiplayer/netcode.js';
 import { MultiplayerRunLoop } from '../multiplayer/run-loop.js';
 import { MultiplayerCourseRenderer } from '../multiplayer/course-renderer.js';
+import { isBrowserTestMode } from '../multiplayer/browser-test-mode.js';
 import {
   RELEASED_LEVELS,
   RELEASED_WORLDS,
@@ -810,6 +811,12 @@ function showScreen(id) {
   dispatch({ type: 'HOOK_SHOW_SCREEN', id });
 }
 
+const multiplayerTestHooks = isBrowserTestMode() ? {
+  control(payload) { multiplayerClient?.testControl(payload); },
+  drop() { multiplayerClient?.dropForTest(); },
+  reconnect() { return multiplayerClient?.reconnectForTest(); },
+} : {};
+
 window.__savoriaTest = {
   startLevel,
   showScreen,
@@ -830,9 +837,7 @@ window.__savoriaTest = {
     get failureCount() { return multiplayerFailureCount; },
     get renderedPlayerCount() { return multiplayerCourseRenderer?.playerVisuals.size ?? 0; },
     get hasCourseCanvas() { return Boolean(multiplayerCourseRenderer?.renderer.domElement.isConnected); },
-    control(payload) { multiplayerClient?.testControl(payload); },
-    drop() { multiplayerClient?.dropForTest(); },
-    reconnect() { return multiplayerClient?.reconnectForTest(); },
+    ...multiplayerTestHooks,
     timing: {
       remoteInterpolationMs: REMOTE_INTERPOLATION_MS,
       localCorrectionMs: LOCAL_CORRECTION_MS,

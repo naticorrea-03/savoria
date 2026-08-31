@@ -42,12 +42,15 @@ after(async () => {
 test('one process serves health, static files, and private Colyseus rooms', async () => {
   const health = await fetch('http://127.0.0.1:2568/health');
   const home = await fetch('http://127.0.0.1:2568/');
+  const testMode = await fetch('http://127.0.0.1:2568/__savoria-test-mode.js');
   const host = await createClient();
   const serverRoom = testServer.getRoomById(host.roomId);
 
   assert.deepEqual(await health.json(), { ok: true });
   assert.equal(home.status, 200);
   assert.match(await home.text(), /Savoria/i);
+  assert.equal(testMode.status, 200);
+  assert.equal(await testMode.text(), 'globalThis.__SAVORIA_BROWSER_TESTS__ = false;\n');
   assert.match(host.roomId, /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/);
   assert.equal(serverRoom.maxClients, 2);
   assert.equal(serverRoom.patchRate, 50);

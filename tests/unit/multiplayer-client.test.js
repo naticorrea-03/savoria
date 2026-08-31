@@ -142,6 +142,8 @@ test('client sends only the exact multiplayer input contract', async () => {
 });
 
 test('host pause and browser controls stay outside the four-field input payload', async () => {
+  const previousTestMode = globalThis.__SAVORIA_BROWSER_TESTS__;
+  globalThis.__SAVORIA_BROWSER_TESTS__ = true;
   const room = fakeRoom();
   room.reconnectionToken = 'reconnect-token';
   room.reconnection.enabled = true;
@@ -156,28 +158,47 @@ test('host pause and browser controls stay outside the four-field input payload'
       return reconnectedRoom;
     }
   }
-  const client = new MultiplayerClient({
-    identity: { playerId: 'stable-player', guestName: 'Nati' },
-    loadSdk: async () => ({ Client }),
-  });
-  await client.createRoom({ characterId: 'fatsio', unlockedLevelIds: ['1-1'] });
+  try {
+    const client = new MultiplayerClient({
+      identity: { playerId: 'stable-player', guestName: 'Nati' },
+      loadSdk: async () => ({ Client }),
+    });
+    await client.createRoom({ characterId: 'fatsio', unlockedLevelIds: ['1-1'] });
 
-  client.pause();
-  client.testControl({ action: 'goal', playerId: 'session-host' });
-  client.dropForTest();
-  room.onDrop.emit();
-  await client.reconnectForTest();
+    client.pause();
+    client.testControl({ action: 'goal', playerId: 'session-host' });
+    client.dropForTest();
+    room.onDrop.emit();
+    await client.reconnectForTest();
 
-  assert.deepEqual(room.sent, [
-    [MESSAGE.PAUSE, {}],
-    [MESSAGE.TEST_CONTROL, { action: 'goal', playerId: 'session-host' }],
-  ]);
-  assert.deepEqual(closed, [4001]);
-  assert.equal(room.reconnection.enabled, false);
-  assert.deepEqual(reconnectedRoom.sent, [[
-    MESSAGE.RECONNECT,
-    { protocolVersion: PROTOCOL_VERSION },
-  ]]);
+    assert.deepEqual(room.sent, [
+      [MESSAGE.PAUSE, {}],
+      [MESSAGE.TEST_CONTROL, { action: 'goal', playerId: 'session-host' }],
+    ]);
+    assert.deepEqual(closed, [4001]);
+    assert.equal(room.reconnection.enabled, false);
+    assert.deepEqual(reconnectedRoom.sent, [[
+      MESSAGE.RECONNECT,
+      { protocolVersion: PROTOCOL_VERSION },
+    ]]);
+  } finally {
+    globalThis.__SAVORIA_BROWSER_TESTS__ = previousTestMode;
+  }
+});
+
+test('production client instances do not surface browser test mutation methods', () => {
+  const previousTestMode = globalThis.__SAVORIA_BROWSER_TESTS__;
+  globalThis.__SAVORIA_BROWSER_TESTS__ = false;
+  try {
+    const client = new MultiplayerClient({
+      identity: { playerId: 'stable-player', guestName: 'Nati' },
+    });
+    assert.equal(client.testControl, undefined);
+    assert.equal(client.dropForTest, undefined);
+    assert.equal(client.reconnectForTest, undefined);
+  } finally {
+    globalThis.__SAVORIA_BROWSER_TESTS__ = previousTestMode;
+  }
 });
 
 test('failed reconnection exposes expired-room recovery', async () => {

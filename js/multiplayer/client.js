@@ -6,6 +6,7 @@ import {
 } from './protocol.js';
 import { playerMarkerColor } from './identity.js';
 import { normalizeRoomCode } from './invite.js';
+import { isBrowserTestMode } from './browser-test-mode.js';
 
 export class MultiplayerClient {
   constructor({
@@ -25,6 +26,7 @@ export class MultiplayerClient {
     this.sdkClient = null;
     this.room = null;
     this.intentionalLeaves = new WeakSet();
+    if (isBrowserTestMode()) attachBrowserTestControls(this);
   }
 
   async createRoom(options) {
@@ -62,30 +64,6 @@ export class MultiplayerClient {
   sendInput(input) {
     if (!isValidInput(input)) throw new Error('Invalid multiplayer input');
     this.room?.send(MESSAGE.INPUT, input);
-  }
-
-  testControl(payload) {
-    this.room?.send(MESSAGE.TEST_CONTROL, payload);
-  }
-
-  dropForTest() {
-    if (!this.room) return;
-    this.testReconnectToken = this.room.reconnectionToken;
-    this.room.reconnection.enabled = false;
-    this.room.connection?.close(4001);
-  }
-
-  async reconnectForTest() {
-    if (!this.testReconnectToken || !this.sdkClient) {
-      throw new Error('No browser test reconnection is pending');
-    }
-    const room = await this.sdkClient.reconnect(this.testReconnectToken);
-    await room.waitForInitialState?.();
-    this.testReconnectToken = null;
-    this.bindRoom(room);
-    this.resetNetcode('reconnect');
-    room.send(MESSAGE.RECONNECT, { protocolVersion: PROTOCOL_VERSION });
-    this.onStatus({ kind: 'connected', message: 'Back in the room.' });
   }
 
   async leave() {
@@ -146,6 +124,38 @@ export class MultiplayerClient {
     if (room.state) this.onState(toLobbyView(room.state, room.sessionId));
     return room;
   }
+}
+
+function attachBrowserTestControls(client) {
+  Object.defineProperties(client, {
+    testControl: {
+      value(payload) {
+        this.room?.send(MESSAGE.TEST_CONTROL, payload);
+      },
+    },
+    dropForTest: {
+      value() {
+        if (!this.room) return;
+        this.testReconnectToken = this.room.reconnectionToken;
+        this.room.reconnection.enabled = false;
+        this.room.connection?.close(4001);
+      },
+    },
+    reconnectForTest: {
+      async value() {
+        if (!this.testReconnectToken || !this.sdkClient) {
+          throw new Error('No browser test reconnection is pending');
+        }
+        const room = await this.sdkClient.reconnect(this.testReconnectToken);
+        await room.waitForInitialState?.();
+        this.testReconnectToken = null;
+        this.bindRoom(room);
+        this.resetNetcode('reconnect');
+        room.send(MESSAGE.RECONNECT, { protocolVersion: PROTOCOL_VERSION });
+        this.onStatus({ kind: 'connected', message: 'Back in the room.' });
+      },
+    },
+  });
 }
 
 export async function loadVendoredSdk() {

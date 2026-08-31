@@ -11,6 +11,13 @@ export default defineConfig({
     {
       command: 'python3 serve.py',
       port: 8977,
+      env: { SAVORIA_BROWSER_TESTS: '1' },
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      command: 'python3 serve.py',
+      port: 8978,
+      env: { PORT: '8978' },
       reuseExistingServer: !process.env.CI,
     },
     {

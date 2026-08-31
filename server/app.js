@@ -47,6 +47,15 @@ export function createStaticMiddleware(rootDirectory) {
       response.status(400).send('Bad request');
       return;
     }
+    if (pathname === '/__savoria-test-mode.js') {
+      response.set('content-type', 'text/javascript; charset=utf-8');
+      response.set('cache-control', 'no-cache');
+      response.status(200);
+      const body = `globalThis.__SAVORIA_BROWSER_TESTS__ = ${process.env.SAVORIA_BROWSER_TESTS === '1'};\n`;
+      if (request.method === 'HEAD') response.end();
+      else response.send(body);
+      return;
+    }
 
     let candidate = path.resolve(root, `.${pathname}`);
     if (candidate !== root && !candidate.startsWith(`${root}${path.sep}`)) {
