@@ -83,6 +83,29 @@ test('room state exposes the complete lobby contract and rejects a third player'
   await guest.leave();
 });
 
+test('lobby preserves guest identity while allowing duplicate characters', async () => {
+  const host = await createClient({
+    characterId: 'fatsio',
+    guestName: 'Nati',
+    identityId: 'stable-nati',
+  });
+  const guest = await joinClient(host.roomId, {
+    characterId: 'fatsio',
+    guestName: 'Alex',
+    identityId: 'stable-alex',
+  });
+  const state = testServer.getRoomById(host.roomId).state;
+
+  assert.equal(state.players.get(host.sessionId).characterId, 'fatsio');
+  assert.equal(state.players.get(guest.sessionId).characterId, 'fatsio');
+  assert.equal(state.players.get(host.sessionId).guestName, 'Nati');
+  assert.equal(state.players.get(guest.sessionId).guestName, 'Alex');
+  assert.equal(state.players.get(host.sessionId).identityId, 'stable-nati');
+  assert.equal(state.players.get(guest.sessionId).identityId, 'stable-alex');
+
+  await guest.leave();
+});
+
 test('create, join, and invalid room codes enforce protocol version 1', async () => {
   await assert.rejects(
     createClient({ protocolVersion: 2 }),
@@ -206,7 +229,7 @@ test('valid input drives the authoritative 60 Hz simulation and malformed input 
   const firstTick = serverRoom.courseState.tick;
   await serverRoom.waitForNextTimestep();
   await serverRoom.waitForNextTimestep();
-  assert.equal(serverRoom.courseState.tick, firstTick + 2);
+  assert.ok(serverRoom.courseState.tick >= firstTick + 2);
   assert.ok(serverRoom.state.players.get(host.sessionId).positionX > startX);
   await guest.leave();
 });

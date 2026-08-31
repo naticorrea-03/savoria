@@ -89,7 +89,12 @@ export class SavoriaRoom extends Room {
 
   onJoin(client, options) {
     const normalized = client.auth ?? validateJoinOptions(options);
-    const player = createLobbyPlayer(client.sessionId, normalized.characterId);
+    const player = createLobbyPlayer(
+      client.sessionId,
+      normalized.characterId,
+      normalized.guestName,
+      normalized.identityId || client.sessionId,
+    );
     this.state.players.set(client.sessionId, player);
     this.campaignUnlocks.set(client.sessionId, normalized.unlockedLevelIds);
     this.latestInputs.set(client.sessionId, { ...NEUTRAL_INPUT });
@@ -355,7 +360,32 @@ function validateJoinOptions(options) {
   if (!unlockedLevelIds.has(DEFAULT_LEVEL_ID)) {
     throw applicationError('The first course must be unlocked');
   }
-  return { characterId, unlockedLevelIds };
+  const guestName = normalizeGuestName(options.guestName);
+  const identityId = normalizeIdentityId(options.identityId);
+  return { characterId, guestName, identityId, unlockedLevelIds };
+}
+
+function normalizeGuestName(value) {
+  if (value === undefined) return 'Guest Chef';
+  if (typeof value !== 'string') throw applicationError('Invalid guest name');
+  const name = value
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 24);
+  if (!name) throw applicationError('Invalid guest name');
+  return name;
+}
+
+function normalizeIdentityId(value) {
+  if (value === undefined) return '';
+  if (typeof value !== 'string'
+    || value.length < 8
+    || value.length > 64
+    || !/^[A-Za-z0-9-]+$/.test(value)) {
+    throw applicationError('Invalid player identity');
+  }
+  return value;
 }
 
 function assertProtocol(version) {

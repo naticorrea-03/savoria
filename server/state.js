@@ -2,6 +2,8 @@ import { schema, t } from '@colyseus/schema';
 
 export const PlayerState = schema({
   playerId: t.string(),
+  identityId: t.string(),
+  guestName: t.string(),
   characterId: t.string(),
   connected: t.boolean(),
   ready: t.boolean(),
@@ -114,9 +116,16 @@ export function createLobbyState(protocolVersion, selectedLevelId) {
   return state;
 }
 
-export function createLobbyPlayer(playerId, characterId) {
+export function createLobbyPlayer(
+  playerId,
+  characterId,
+  guestName = 'Guest Chef',
+  identityId = playerId,
+) {
   const player = new PlayerState();
   player.playerId = playerId;
+  player.identityId = identityId;
+  player.guestName = guestName;
   player.characterId = characterId;
   player.connected = true;
   player.ready = false;

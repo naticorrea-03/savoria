@@ -43,7 +43,10 @@
             <h1 id="title-current-course">1-1 Farfalle Fields</h1>
             <div class="title-current-stars" id="title-current-stars" aria-label="No course stars">☆☆☆</div>
             <p>Pick your chef, collect every tomato, and reach the landmark.</p>
-            <button class="btn" id="btn-play" data-action="start" data-primary>Continue adventure</button>
+            <div class="title-actions">
+              <button class="btn" id="btn-play" data-action="start" data-primary>Solo Adventure</button>
+              <button class="btn online-btn" id="btn-online" data-action="online">Online Co-op</button>
+            </div>
           </div>
 
           <div class="title-chef-stage" aria-label="Your three chefs">
@@ -114,6 +117,67 @@
           <a class="title-contribute" href="https://github.com/nataliacorrea03/savoria">Build the next course on GitHub</a>
         </aside>
       </div>
+    </div>
+
+    <div id="online-screen" class="screen online-screen hidden" data-ui-state="online" aria-labelledby="online-title">
+      <section class="online-panel">
+        <p class="panel-step">Private two-player room</p>
+        <h1 id="online-title">Online Co-op</h1>
+        <p>Cook through Worlds 1 and 2 with one invited chef.</p>
+
+        <div class="online-fields">
+          <label for="online-guest-name">Guest name</label>
+          <input id="online-guest-name" name="guest-name" maxlength="24" autocomplete="nickname">
+
+          <label for="online-character">Your chef</label>
+          <select id="online-character" name="character">
+            <option value="fatsio">Fatsio</option>
+            <option value="dinnerette">Dinnerette</option>
+            <option value="chefno">Chefno</option>
+          </select>
+        </div>
+
+        <div class="online-room-actions">
+          <button class="btn" type="button" data-action="create-room" data-primary>Create room</button>
+          <span aria-hidden="true">or</span>
+          <label for="online-room-code">Private room code</label>
+          <div class="online-code-row">
+            <input id="online-room-code" name="room-code" maxlength="7" inputmode="text" autocomplete="off" spellcheck="false" placeholder="ABC234">
+            <button class="btn small" type="button" data-action="join-room">Join room</button>
+          </div>
+        </div>
+
+        <p id="online-status" class="online-status" role="status" aria-live="polite"></p>
+        <button class="text-button" type="button" data-action="back-home">Back to home</button>
+      </section>
+    </div>
+
+    <div id="lobby-screen" class="screen lobby-screen hidden" data-ui-state="lobby" aria-labelledby="lobby-title">
+      <section class="lobby-panel">
+        <header class="lobby-header">
+          <div>
+            <p class="panel-step">Private kitchen</p>
+            <h1 id="lobby-title">Co-op Lobby</h1>
+          </div>
+          <div class="room-code-block">
+            <span>Room code</span>
+            <strong id="lobby-room-code">------</strong>
+            <button type="button" class="text-button" data-action="copy-invite">Copy invite link</button>
+          </div>
+        </header>
+
+        <div id="lobby-players" class="lobby-players" role="list" aria-label="Players"></div>
+
+        <div class="lobby-controls">
+          <label for="lobby-course">Course</label>
+          <select id="lobby-course" name="course"></select>
+          <button class="btn" id="lobby-ready" type="button" data-action="lobby-ready">Ready up</button>
+          <button class="btn" id="lobby-start" type="button" data-action="lobby-start">Start course</button>
+        </div>
+
+        <p id="lobby-status" class="online-status" role="status" aria-live="polite">Waiting for another chef.</p>
+        <button class="text-button" type="button" data-action="leave-lobby">Leave room</button>
+      </section>
     </div>
 
     <div id="char-screen" class="screen hidden" data-ui-state="characters">

@@ -5,6 +5,23 @@ import { chefSpriteConfig } from '../core/chef-sprite.js';
 import { createTextureStore } from '../core/texture-store.js';
 import { collectVisualAssets } from '../visuals/manifest-utils.js';
 import {
+  MultiplayerClient,
+  loadVendoredSdk,
+} from '../multiplayer/client.js';
+import {
+  getLocalIdentity,
+  saveGuestName,
+} from '../multiplayer/identity.js';
+import {
+  inviteUrl,
+  normalizeRoomCode,
+  roomCodeFromSearch,
+} from '../multiplayer/invite.js';
+import {
+  LOCAL_CORRECTION_MS,
+  REMOTE_INTERPOLATION_MS,
+} from '../multiplayer/netcode.js';
+import {
   RELEASED_LEVELS,
   RELEASED_WORLDS,
   buildReleasedLevel,
@@ -35,6 +52,12 @@ let lives = 4;
 let levelStartId = 0;
 let msgTimer = null;
 const hasWebGL = createWebGLCapabilityProbe(() => document.createElement('canvas'));
+let localIdentity = getLocalIdentity(localStorage);
+let multiplayerClient = null;
+let lobbyView = null;
+let multiplayerStatus = { kind: 'idle', message: '' };
+let multiplayerSdkLoaded = false;
+let netcodeResetCount = 0;
 
 function dispatch(event) {
   const previous = uiState;
@@ -256,12 +279,222 @@ function cancelLevel() {
   session = null;
 }
 
+function unlockedLevelIds() {
+  return RELEASED_LEVELS
+    .slice(0, Math.max(1, Number(uiState.save.unlocked) || 1))
+    .map(({ id }) => id);
+}
+
+function multiplayerJoinOptions() {
+  return {
+    characterId: $('online-character').value,
+    unlockedLevelIds: unlockedLevelIds(),
+  };
+}
+
+function setMultiplayerScreen(screen) {
+  $('title-screen').classList.toggle('hidden', screen !== 'title');
+  $('online-screen').classList.toggle('hidden', screen !== 'online');
+  $('lobby-screen').classList.toggle('hidden', screen !== 'lobby');
+  app.dataset.screen = screen;
+  const root = $(`${screen}-screen`);
+  const primary = root?.querySelector('[data-primary]:not(.hidden)') ?? root;
+  queueMicrotask(() => primary?.focus({ preventScroll: true }));
+}
+
+function openOnline() {
+  $('online-guest-name').value = localIdentity.guestName;
+  $('online-character').value = uiState.save.chef;
+  const code = roomCodeFromSearch(location.search);
+  if (code) $('online-room-code').value = code;
+  setMultiplayerScreen('online');
+}
+
+function openHome() {
+  $('online-screen').classList.add('hidden');
+  $('lobby-screen').classList.add('hidden');
+  const url = new URL(location.href);
+  url.searchParams.delete('room');
+  history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  renderUi(uiState, { previousScreen: 'online' });
+}
+
+function setOnlineStatus(message, kind = 'info') {
+  multiplayerStatus = { kind, message };
+  const status = $('online-status');
+  status.textContent = message;
+  status.dataset.kind = kind;
+}
+
+function setLobbyStatus(message, kind = 'info') {
+  multiplayerStatus = { kind, message };
+  const status = $('lobby-status');
+  status.textContent = message;
+  status.dataset.kind = kind;
+}
+
+function createPlayerCard(player, view) {
+  const card = document.createElement('article');
+  card.className = 'lobby-player';
+  card.dataset.characterId = player.characterId;
+  card.style.setProperty('--player-color', player.color);
+  card.setAttribute('role', 'listitem');
+  card.setAttribute('aria-label', `${player.guestName}, ${player.characterId}, ${player.ready ? 'ready' : 'not ready'}`);
+
+  const avatar = document.createElement('div');
+  avatar.className = 'lobby-player-avatar';
+  const image = document.createElement('img');
+  const character = CHARACTERS.find(({ id }) => id === player.characterId);
+  image.src = character?.img ?? CHARACTERS[0].img;
+  image.alt = '';
+  avatar.append(image);
+
+  const name = document.createElement('strong');
+  name.className = 'lobby-player-name';
+  name.textContent = player.guestName;
+  const role = document.createElement('span');
+  role.className = 'lobby-player-role';
+  const roles = [];
+  if (player.sessionId === view.hostPlayerId) roles.push('Host');
+  if (player.isLocal) roles.push('You');
+  role.textContent = roles.join(' · ') || 'Guest';
+  const ready = document.createElement('span');
+  ready.className = `lobby-player-ready${player.ready ? ' is-ready' : ''}`;
+  ready.textContent = player.connected
+    ? (player.ready ? 'Ready' : 'Choosing')
+    : 'Reconnecting';
+  card.append(avatar, name, role, ready);
+  return card;
+}
+
+function renderLobby(view) {
+  lobbyView = view;
+  const players = $('lobby-players');
+  players.replaceChildren(...view.players.map((player) => createPlayerCard(player, view)));
+  $('lobby-room-code').textContent = multiplayerClient?.roomCode ?? '------';
+
+  const course = $('lobby-course');
+  const visibleLevelIds = view.isHost
+    ? unlockedLevelIds()
+    : RELEASED_LEVELS.map(({ id }) => id);
+  course.replaceChildren(...visibleLevelIds.map((levelId) => {
+    const level = RELEASED_LEVELS.find(({ id }) => id === levelId);
+    const option = document.createElement('option');
+    option.value = levelId;
+    option.textContent = `${levelId} ${level?.name ?? levelId}`;
+    return option;
+  }));
+  if ([...course.options].some(({ value }) => value === view.selectedLevelId)) {
+    course.value = view.selectedLevelId;
+  }
+  course.disabled = !view.isHost || view.phase !== 'lobby';
+
+  const localPlayer = view.players.find(({ isLocal }) => isLocal);
+  const ready = $('lobby-ready');
+  ready.textContent = localPlayer?.ready ? 'Not ready' : 'Ready up';
+  ready.disabled = !localPlayer?.connected || view.phase !== 'lobby';
+  ready.dataset.ready = String(localPlayer?.ready === true);
+
+  const start = $('lobby-start');
+  start.classList.toggle('hidden', !view.isHost);
+  start.disabled = !view.canStart || view.phase !== 'lobby';
+
+  if (view.phase === 'playing') {
+    setLobbyStatus('Course starting. Both chefs are connected.', 'connected');
+  } else if (view.players.length < 2) {
+    setLobbyStatus('Waiting for another chef. Share the private room code.');
+  } else if (!view.canStart) {
+    setLobbyStatus('Both chefs need to ready up.');
+  } else {
+    setLobbyStatus('Both chefs are ready. The host can start.');
+  }
+}
+
+function handleMultiplayerStatus(status) {
+  if (status.kind === 'expired') {
+    setOnlineStatus(status.message, status.kind);
+    openOnline();
+    return;
+  }
+  setLobbyStatus(status.message, status.kind);
+}
+
+async function connectMultiplayer(mode) {
+  const roomCode = normalizeRoomCode($('online-room-code').value);
+  if (mode === 'join' && !roomCode) {
+    setOnlineStatus('Enter a valid six-character room code.', 'error');
+    return;
+  }
+
+  localIdentity = saveGuestName(localStorage, $('online-guest-name').value);
+  setOnlineStatus(mode === 'create' ? 'Creating your private kitchen…' : 'Joining the kitchen…');
+  multiplayerClient = new MultiplayerClient({
+    identity: localIdentity,
+    loadSdk: async () => {
+      const sdk = await loadVendoredSdk();
+      multiplayerSdkLoaded = true;
+      return sdk;
+    },
+    onState: renderLobby,
+    onStatus: handleMultiplayerStatus,
+    resetNetcode: () => { netcodeResetCount += 1; },
+  });
+
+  try {
+    const room = mode === 'create'
+      ? await multiplayerClient.createRoom(multiplayerJoinOptions())
+      : await multiplayerClient.joinRoom(roomCode, multiplayerJoinOptions());
+    history.replaceState(null, '', inviteUrl(location.href, room.roomId));
+    $('lobby-room-code').textContent = room.roomId;
+    setMultiplayerScreen('lobby');
+  } catch (error) {
+    multiplayerClient = null;
+    const message = mode === 'join'
+      ? 'That room expired. Create a new room or enter another code.'
+      : 'The online kitchen is unavailable. Try again.';
+    setOnlineStatus(message, mode === 'join' ? 'expired' : 'error');
+  }
+}
+
+async function leaveLobby() {
+  await multiplayerClient?.leave();
+  multiplayerClient = null;
+  lobbyView = null;
+  openOnline();
+}
+
 function handleAction(action, target, event) {
   switch (action) {
     case 'start':
       sfx.ensure();
       sfx.coin();
       dispatch({ type: 'START' });
+      break;
+    case 'online':
+      openOnline();
+      break;
+    case 'back-home':
+      openHome();
+      break;
+    case 'create-room':
+      void connectMultiplayer('create');
+      break;
+    case 'join-room':
+      void connectMultiplayer('join');
+      break;
+    case 'lobby-ready':
+      multiplayerClient?.setReady(target.dataset.ready !== 'true');
+      break;
+    case 'lobby-start':
+      multiplayerClient?.start();
+      break;
+    case 'copy-invite':
+      navigator.clipboard?.writeText(inviteUrl(location.href, multiplayerClient.roomCode))
+        .then(() => setLobbyStatus('Invite link copied.'))
+        .catch(() => setLobbyStatus('Copy the room code above.', 'error'));
+      break;
+    case 'leave-lobby':
+      void leaveLobby();
       break;
     case 'choose-character':
       sfx.coin();
@@ -320,6 +553,14 @@ app.addEventListener('click', (event) => {
   handleAction(target.dataset.action, target, event);
 });
 
+$('online-room-code').addEventListener('input', (event) => {
+  event.target.value = event.target.value.toUpperCase().replace(/[\s-]+/g, '').slice(0, 6);
+});
+
+$('lobby-course').addEventListener('change', (event) => {
+  if (lobbyView?.isHost) multiplayerClient?.selectLevel(event.target.value);
+});
+
 const movementCodes = new Set([
   'ArrowLeft',
   'ArrowRight',
@@ -351,7 +592,10 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden && dispatch({ type: 'PAUSE' })) session?.pause();
 });
 
-addEventListener('beforeunload', cancelLevel);
+addEventListener('beforeunload', () => {
+  cancelLevel();
+  void multiplayerClient?.leave();
+});
 
 function showScreen(id) {
   dispatch({ type: 'HOOK_SHOW_SCREEN', id });
@@ -362,9 +606,21 @@ window.__savoriaTest = {
   showScreen,
   releasedLevels: RELEASED_LEVELS,
   get session() { return session; },
+  multiplayer: {
+    get identity() { return { ...localIdentity }; },
+    get view() { return lobbyView; },
+    get status() { return { ...multiplayerStatus }; },
+    get sdkLoaded() { return multiplayerSdkLoaded; },
+    get netcodeResetCount() { return netcodeResetCount; },
+    timing: {
+      remoteInterpolationMs: REMOTE_INTERPOLATION_MS,
+      localCorrectionMs: LOCAL_CORRECTION_MS,
+    },
+  },
 };
 
 renderUi(uiState);
+if (roomCodeFromSearch(location.search)) openOnline();
 if (uiState.notice) {
   setTimeout(() => dispatch({ type: 'DISMISS_NOTICE' }), 6000);
 }

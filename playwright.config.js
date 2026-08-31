@@ -7,10 +7,18 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:8977',
     viewport: { width: 1440, height: 900 },
   },
-  webServer: {
-    command: 'python3 serve.py',
-    port: 8977,
-    reuseExistingServer: !process.env.CI,
-  },
+  webServer: [
+    {
+      command: 'python3 serve.py',
+      port: 8977,
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      command: 'node server/index.js',
+      env: { HOST: '127.0.0.1', PORT: '2567' },
+      port: 2567,
+      reuseExistingServer: !process.env.CI,
+    },
+  ],
   reporter: process.env.CI ? 'github' : 'list',
 });
