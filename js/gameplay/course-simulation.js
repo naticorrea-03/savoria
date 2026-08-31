@@ -125,7 +125,10 @@ export function stepCourseSimulation(state, inputsByPlayer = {}, seconds = 0) {
   const elapsed = Math.max(0, Number.isFinite(seconds) ? seconds : 0);
   state.accumulator += elapsed;
   let firstStep = true;
-  while (state.accumulator + Number.EPSILON >= FIXED_STEP_SECONDS) {
+  while (
+    state.phase === 'playing'
+    && state.accumulator + Number.EPSILON >= FIXED_STEP_SECONDS
+  ) {
     stepFixed(state, inputsByPlayer, FIXED_STEP_SECONDS, firstStep);
     state.accumulator -= FIXED_STEP_SECONDS;
     firstStep = false;
@@ -136,6 +139,7 @@ export function stepCourseSimulation(state, inputsByPlayer = {}, seconds = 0) {
 export function createCourseSnapshot(state) {
   return {
     phase: state.phase,
+    failureReason: state.failureReason ?? null,
     failedPlayerId: state.failedPlayerId ?? null,
     tick: state.tick,
     elapsed: state.elapsed,
@@ -163,10 +167,20 @@ function stepFixed(state, inputsByPlayer, seconds, acceptJumpPress) {
   state.tick += 1;
   state.elapsed += seconds;
   state.timer = Math.max(0, state.timer - seconds);
+  if (state.timer <= 0) {
+    state.phase = 'failed';
+    state.failureReason = 'timeout';
+    state.failedPlayerId = null;
+    return;
+  }
   updateMovingPlatforms(state);
 
   for (const playerId of Object.keys(state.players).sort()) {
     const player = state.players[playerId];
+    player.invulnerabilitySeconds = Math.max(
+      0,
+      player.invulnerabilitySeconds - seconds,
+    );
     if (!player.active || player.safe) continue;
     const input = inputsByPlayer[playerId] ?? {};
     state.players[playerId] = applyPlayerInput(
@@ -326,7 +340,10 @@ function updateCourseLandmarks(state) {
       continue;
     }
     const playerCollider = playerAabb(player);
-    if (state.hazards.some((hazard) => playerCollider.intersects(hazard.aabb))) {
+    if (
+      player.invulnerabilitySeconds <= 0
+      && state.hazards.some((hazard) => playerCollider.intersects(hazard.aabb))
+    ) {
       loseLifeAndRespawn(state, player);
       if (state.phase === 'failed') return;
       continue;
