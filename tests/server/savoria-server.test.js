@@ -2,6 +2,7 @@ import test, { after, afterEach, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { boot } from '@colyseus/testing';
 import { CloseCode } from '@colyseus/sdk';
+import { createCourseSnapshot } from '../../js/gameplay/course-simulation.js';
 import { RELEASED_LEVELS } from '../../js/levels/index.js';
 import {
   ACTION_RATE_LIMIT_PER_SECOND,
@@ -545,11 +546,32 @@ test('ten simultaneous full rooms stay private, progress independently, and disp
     jumpPressed: false,
     jumpHeld: false,
   });
-  await serverRooms[0].waitForNextTimestep();
+  const roomZeroBefore = roomSnapshot(serverRooms[0]);
+  const otherRoomsBefore = serverRooms.slice(1).map(roomSnapshot);
+  serverRooms[0].stepAuthoritativeSimulation(1 / 60);
+  const roomZeroAfterOwnInput = roomSnapshot(serverRooms[0]);
   assert.equal(serverRooms[0].state.players.get(hosts[0].sessionId).acceptedInputCount, 1);
-  assert.ok(serverRooms.slice(1).every((room, index) => (
-    room.state.players.get(hosts[index + 1].sessionId).acceptedInputCount === 0
-  )));
+  assert.ok(roomZeroAfterOwnInput.tick > roomZeroBefore.tick);
+  assert.notDeepEqual(roomZeroAfterOwnInput.players[hosts[0].sessionId].position,
+    roomZeroBefore.players[hosts[0].sessionId].position);
+  assert.notDeepEqual(roomZeroAfterOwnInput, roomZeroBefore);
+  assert.deepEqual(serverRooms.slice(1).map(roomSnapshot), otherRoomsBefore);
+
+  await hosts[1].request(MESSAGE.INPUT, {
+    axis: -1,
+    running: false,
+    jumpPressed: false,
+    jumpHeld: false,
+  });
+  const roomZeroBeforeOtherInput = roomSnapshot(serverRooms[0]);
+  const roomOneBefore = roomSnapshot(serverRooms[1]);
+  serverRooms[1].stepAuthoritativeSimulation(1 / 60);
+  const roomOneAfterOwnInput = roomSnapshot(serverRooms[1]);
+  assert.equal(serverRooms[1].state.players.get(hosts[1].sessionId).acceptedInputCount, 1);
+  assert.ok(roomOneAfterOwnInput.tick > roomOneBefore.tick);
+  assert.notDeepEqual(roomOneAfterOwnInput.players[hosts[1].sessionId].position,
+    roomOneBefore.players[hosts[1].sessionId].position);
+  assert.deepEqual(roomSnapshot(serverRooms[0]), roomZeroBeforeOtherInput);
 
   await Promise.all(guests.map((guest) => guest.leave()));
   await Promise.all(serverRooms.map((room) => waitUntil(() => room.state.players.size === 1)));
@@ -602,6 +624,20 @@ function assertReconnectCleanup(serverRoom, departedPlayerId, survivorPlayerId) 
   assert.equal(serverRoom.state.phase, 'lobby');
   assert.equal(serverRoom.courseState, null);
   assert.equal(serverRoom.state.timer, 0);
+}
+
+function roomSnapshot(room) {
+  return {
+    tick: room.state.authoritativeTick,
+    timer: room.state.timer,
+    phase: room.state.phase,
+    tomatoCount: room.state.tomatoCount,
+    course: room.courseState ? createCourseSnapshot(room.courseState) : null,
+    players: Object.fromEntries([...room.state.players.entries()].map(([sessionId, player]) => [sessionId, {
+      acceptedInputCount: player.acceptedInputCount,
+      position: { x: player.positionX, y: player.positionY, z: player.positionZ },
+    }])),
+  };
 }
 
 function waitForRoomLeave(room) {

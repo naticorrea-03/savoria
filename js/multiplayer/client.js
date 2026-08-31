@@ -165,11 +165,6 @@ function attachBrowserTestControls(client) {
         this.onStatus({ kind: 'connected', message: 'Back in the room.' });
       },
     },
-    disableReconnectionForTest: {
-      value() {
-        if (this.room?.reconnection) this.room.reconnection.enabled = false;
-      },
-    },
   });
 }
 

@@ -174,8 +174,6 @@ test('host pause and browser controls stay outside the four-field input payload'
 
     client.pause();
     client.testControl({ action: 'goal', playerId: 'session-host' });
-    client.disableReconnectionForTest();
-    assert.equal(room.reconnection.enabled, false);
     client.dropForTest();
     room.onDrop.emit();
     await client.reconnectForTest();
@@ -205,7 +203,6 @@ test('production client instances do not surface browser test mutation methods',
     assert.equal(client.testControl, undefined);
     assert.equal(client.dropForTest, undefined);
     assert.equal(client.reconnectForTest, undefined);
-    assert.equal(client.disableReconnectionForTest, undefined);
   } finally {
     globalThis.__SAVORIA_BROWSER_TESTS__ = previousTestMode;
   }

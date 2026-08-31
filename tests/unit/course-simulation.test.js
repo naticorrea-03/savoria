@@ -233,6 +233,43 @@ test('a compiled tomato is represented plainly and consumed once', () => {
   assert.equal(state.tomatoCount, 1);
 });
 
+test('two chefs overlapping one tomato and the goal publish one authoritative collection and completion', () => {
+  const state = gameplay.createCourseSimulation({
+    level: fixtureLevel({
+      spawn: [0, 0, 0],
+      enemies: [],
+      coins: [[0, 0, 0]],
+      goal: [0, 0, 0],
+    }),
+    seed: 58,
+    players: [
+      { playerId: 'p1', characterId: 'fatsio' },
+      { playerId: 'p2', characterId: 'chefno' },
+    ],
+  });
+  let collectionTransitions = 0;
+  let completionTransitions = 0;
+  let wasCollected = false;
+  let hadCompletion = false;
+
+  for (let step = 0; step < 4; step += 1) {
+    gameplay.stepCourseSimulation(state, { p1: {}, p2: {} }, 1 / 60);
+    const collected = state.collectibles[0].takenBy !== null;
+    const completed = state.completion !== null;
+    if (collected && !wasCollected) collectionTransitions += 1;
+    if (completed && !hadCompletion) completionTransitions += 1;
+    wasCollected = collected;
+    hadCompletion = completed;
+  }
+
+  assert.equal(collectionTransitions, 1);
+  assert.equal(completionTransitions, 1);
+  assert.equal(state.tomatoCount, 1);
+  assert.equal(state.collectibles[0].takenBy, 'p1');
+  assert.deepEqual(state.goal.reachedPlayerIds, ['p1', 'p2']);
+  assert.equal(state.phase, 'completed');
+});
+
 test('each chef starts with three hearts and four independent lives without player collision', () => {
   const state = gameplay.createCourseSimulation({
     level: fixtureLevel({ enemies: [] }),

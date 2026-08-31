@@ -815,7 +815,6 @@ const multiplayerTestHooks = isBrowserTestMode() ? {
   control(payload) { multiplayerClient?.testControl(payload); },
   drop() { multiplayerClient?.dropForTest(); },
   reconnect() { return multiplayerClient?.reconnectForTest(); },
-  disableReconnection() { multiplayerClient?.disableReconnectionForTest(); },
 } : {};
 
 window.__savoriaTest = {

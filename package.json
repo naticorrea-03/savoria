@@ -10,6 +10,7 @@
     "test:unit": "node --test tests/unit/*.test.js",
     "test:server": "node --test tests/server/*.test.js",
     "test:browser": "playwright test",
+    "test:browser:solo": "playwright test --config=playwright.solo.config.js",
     "test": "npm run test:unit && npm run test:server"
   },
   "devDependencies": {

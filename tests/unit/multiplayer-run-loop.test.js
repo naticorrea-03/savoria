@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createCourseSimulation, stepCourseSimulation } from '../../js/gameplay/course-simulation.js';
 import { MultiplayerRunLoop } from '../../js/multiplayer/run-loop.js';
 
 function view({
@@ -38,6 +39,186 @@ function view({
         position: { x: remoteX, y: 2, z: 0 },
       },
     ],
+  };
+}
+
+class LoopbackAuthority {
+  constructor() {
+    this.now = 0;
+    this.nextSimulationAt = 1000 / 60;
+    this.nextPatchAt = 50;
+    this.nextPatchNumber = 0;
+    this.connected = false;
+    this.firstPatchReceived = false;
+    this.rejectedTicks = 0;
+    this.maxPendingInputs = 0;
+    this.latestInput = neutralInput();
+    this.acceptedInputCount = 0;
+    this.outbound = [];
+    this.inbound = [];
+    this.lastCorrectionAt = null;
+    this.simulation = createCourseSimulation({
+      level: loopbackLevel(),
+      seed: 'loopback-rtt',
+      players: [
+        { playerId: 'local', characterId: 'fatsio' },
+        { playerId: 'remote', characterId: 'chefno' },
+      ],
+    });
+    this.loop = new MultiplayerRunLoop({
+      sendInput: (controls) => this.outbound.push({
+        controls,
+        deliverAt: this.now + 75,
+      }),
+      onPresentation: (presentation) => { this.presentation = presentation; },
+    });
+  }
+
+  get pendingInputCount() {
+    return this.loop.pendingInputCount;
+  }
+
+  get authoritativePosition() {
+    const player = this.simulation.players.local;
+    return { x: player.positionX, y: player.positionY, z: player.positionZ };
+  }
+
+  connect() {
+    this.connected = true;
+    this.deliverView(this.view());
+  }
+
+  drop() {
+    this.connected = false;
+    this.outbound = [];
+    this.inbound = [];
+    this.loop.reset();
+  }
+
+  reconnect() {
+    this.connected = true;
+    this.deliverView(this.view());
+  }
+
+  press(code) {
+    this.loop.press(code);
+  }
+
+  release(code) {
+    this.loop.release(code);
+  }
+
+  advanceTo(target) {
+    for (this.now += 1; this.now <= target; this.now += 1) {
+      this.loop.advance(this.now);
+      this.maxPendingInputs = Math.max(this.maxPendingInputs, this.loop.pendingInputCount);
+      this.deliverOutbound();
+      while (this.now + Number.EPSILON >= this.nextSimulationAt) {
+        stepCourseSimulation(this.simulation, {
+          local: this.latestInput,
+          remote: neutralInput(),
+        }, 1 / 60);
+        this.nextSimulationAt += 1000 / 60;
+      }
+      while (this.now + Number.EPSILON >= this.nextPatchAt) {
+        this.queuePatch();
+        this.nextPatchAt += 50;
+      }
+      this.deliverInbound();
+    }
+  }
+
+  correctionOffsetAt(milliseconds) {
+    const prediction = this.loop.localPrediction;
+    const sample = prediction.sample(this.lastCorrectionAt + milliseconds);
+    return Math.abs(sample.x - prediction.predicted.x)
+      + Math.abs(sample.y - prediction.predicted.y)
+      + Math.abs(sample.z - prediction.predicted.z);
+  }
+
+  deliverOutbound() {
+    if (!this.connected) return;
+    const delivered = this.outbound.filter(({ deliverAt }) => deliverAt <= this.now);
+    this.outbound = this.outbound.filter(({ deliverAt }) => deliverAt > this.now);
+    for (const message of delivered) {
+      this.latestInput = message.controls;
+      this.acceptedInputCount += 1;
+    }
+  }
+
+  queuePatch() {
+    if (!this.connected) return;
+    this.nextPatchNumber += 1;
+    const delay = this.nextPatchNumber === 2 ? 175 : 75;
+    this.inbound.push({ view: this.view(), deliverAt: this.now + delay });
+  }
+
+  deliverInbound() {
+    if (!this.connected) return;
+    const delivered = this.inbound
+      .filter(({ deliverAt }) => deliverAt <= this.now)
+      .sort((left, right) => left.deliverAt - right.deliverAt);
+    this.inbound = this.inbound.filter(({ deliverAt }) => deliverAt > this.now);
+    for (const patch of delivered) this.deliverView(patch.view);
+  }
+
+  deliverView(next) {
+    const applied = this.loop.updateState(next, this.now);
+    if (this.firstPatchReceived && !applied) this.rejectedTicks += 1;
+    if (applied && next.authoritativeTick > 0) {
+      this.firstPatchReceived = true;
+      this.lastCorrectionAt = this.now;
+    }
+  }
+
+  view() {
+    const local = this.simulation.players.local;
+    const remote = this.simulation.players.remote;
+    return {
+      phase: this.simulation.phase,
+      pauseReason: '',
+      isHost: true,
+      authoritativeTick: this.simulation.tick,
+      players: [
+        playerView('local', local, true, this.acceptedInputCount),
+        playerView('remote', remote, false, 0),
+      ],
+    };
+  }
+}
+
+function playerView(sessionId, player, isLocal, acceptedInputCount) {
+  return {
+    sessionId,
+    guestName: sessionId,
+    characterId: player.characterId,
+    color: '#111111',
+    isLocal,
+    connected: true,
+    acceptedInputCount,
+    position: { x: player.positionX, y: player.positionY, z: player.positionZ },
+  };
+}
+
+function neutralInput() {
+  return { axis: 0, running: false, jumpPressed: false, jumpHeld: false };
+}
+
+function loopbackLevel() {
+  return {
+    id: 'loopback',
+    spawn: [0, 0, 0],
+    boxes: [[0, -0.5, 0, 200, 1, 4, 'ground']],
+    movers: [],
+    hazards: [],
+    coins: [],
+    items: [],
+    enemies: [],
+    checkpoint: null,
+    goal: null,
+    boss: null,
+    killY: -20,
+    time: 240,
   };
 }
 
@@ -107,6 +288,35 @@ test('running loop ignores a reordered authoritative room tick', () => {
   assert.notEqual(presentation.local.position.x, 99);
   assert.notEqual(presentation.players.find(({ isLocal }) => !isLocal).position.x, 99);
   assert.equal(sent.length, 1);
+});
+
+test('loopback authority keeps production input prediction stable across 150 ms RTT, reordering, and reconnect', () => {
+  const harness = new LoopbackAuthority();
+
+  harness.connect();
+  harness.press('ArrowRight');
+  harness.advanceTo(18);
+
+  assert.ok(harness.presentation.local.position.x > 0);
+  assert.equal(harness.firstPatchReceived, false);
+  assert.ok(harness.pendingInputCount > 0);
+
+  harness.advanceTo(300);
+  assert.equal(harness.firstPatchReceived, true);
+  assert.ok(harness.maxPendingInputs <= 18, String(harness.maxPendingInputs));
+  assert.ok(harness.rejectedTicks >= 1);
+
+  harness.drop();
+  assert.equal(harness.pendingInputCount, 0);
+  harness.advanceTo(380);
+  harness.reconnect();
+  harness.advanceTo(660);
+  harness.release('ArrowRight');
+  harness.advanceTo(940);
+
+  assert.ok(harness.pendingInputCount <= 6, String(harness.pendingInputCount));
+  assert.ok(harness.loop.lastView.players.find(({ isLocal }) => isLocal).acceptedInputCount > 0);
+  assert.equal(harness.correctionOffsetAt(65), 0);
 });
 
 test('paused room state stops input sends until authority resumes play', () => {

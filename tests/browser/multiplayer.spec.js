@@ -13,14 +13,12 @@ test('production mode excludes browser test mutation hooks', async ({ page }) =>
       control: typeof multiplayer.control,
       drop: typeof multiplayer.drop,
       reconnect: typeof multiplayer.reconnect,
-      disableReconnection: typeof multiplayer.disableReconnection,
     };
   });
   expect(hooks).toEqual({
     control: 'undefined',
     drop: 'undefined',
     reconnect: 'undefined',
-    disableReconnection: 'undefined',
   });
 });
 
@@ -473,12 +471,21 @@ test('forced standalone server shutdown returns both browser contexts to expired
   const guestContext = await browser.newContext();
   const host = await hostContext.newPage();
   const guest = await guestContext.newPage();
-  const consoleErrors = [];
+  const diagnostics = [];
+  const reconnectFailures = [];
   for (const [label, page] of [['host', host], ['guest', guest]]) {
     page.on('console', (message) => {
-      if (message.type() === 'error') consoleErrors.push(`${label}: ${message.text()}`);
+      if (!['warning', 'error'].includes(message.type())) return;
+      const text = message.text();
+      if (message.type() === 'error'
+        && text.includes(`ws://${new URL(standalone.origin).host}/`)
+        && text.includes('net::ERR_CONNECTION_REFUSED')) {
+        reconnectFailures.push(label);
+        return;
+      }
+      diagnostics.push(`${label}: ${message.type()}: ${text}`);
     });
-    page.on('pageerror', (error) => consoleErrors.push(`${label}: ${error.message}`));
+    page.on('pageerror', (error) => diagnostics.push(`${label}: pageerror: ${error.message}`));
   }
 
   try {
@@ -498,9 +505,6 @@ test('forced standalone server shutdown returns both browser contexts to expired
     expect(await host.locator('#lobby-room-code').textContent()).toBe(roomCode);
     expect(await guest.locator('#lobby-room-code').textContent()).toBe(roomCode);
 
-    await Promise.all([host, guest].map((page) => page.evaluate(() => {
-      window.__savoriaTest.multiplayer.disableReconnection();
-    })));
     standalone.child.kill('SIGKILL');
     const [, signal] = await standalone.exit;
     expect(signal).toBe('SIGKILL');
@@ -509,7 +513,8 @@ test('forced standalone server shutdown returns both browser contexts to expired
       await expect(page.getByRole('status')).toContainText('That room expired');
       await expect(page.getByRole('button', { name: 'Create room' })).toBeEnabled();
     }
-    expect(consoleErrors).toEqual([]);
+    assertReconnectAttempts(reconnectFailures);
+    expect(diagnostics).toEqual([]);
   } finally {
     await hostContext.close();
     await guestContext.close();
@@ -594,7 +599,7 @@ test('guest Escape leaves without pausing, then either chef can fail the recover
 async function startStandaloneServer() {
   const child = spawn(process.execPath, ['tests/browser/standalone-server.js'], {
     cwd: process.cwd(),
-    env: { ...process.env, SAVORIA_BROWSER_TESTS: '1' },
+    env: { ...process.env, SAVORIA_BROWSER_TESTS: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const exit = once(child, 'exit');
@@ -620,4 +625,9 @@ async function startStandaloneServer() {
     });
   });
   return { child, exit, origin };
+}
+
+function assertReconnectAttempts(failures) {
+  expect(failures.filter((label) => label === 'host')).toHaveLength(6);
+  expect(failures.filter((label) => label === 'guest')).toHaveLength(6);
 }
