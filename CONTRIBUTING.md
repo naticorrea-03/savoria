@@ -26,7 +26,7 @@ In another terminal, start python3 serve.py and playtest the edited course at ht
 Install dependencies once:
 
 ```bash
-npm install
+npm ci
 ```
 
 Run the validator against the released recipes:
@@ -41,7 +41,15 @@ Run unit and reachability tests:
 npm test
 ```
 
-Start the local server in one terminal:
+Start the combined Node server for Online Co-op in one terminal:
+
+```bash
+npm start
+```
+
+Confirm `http://127.0.0.1:2567/health` returns `{ "ok": true }`, then use two desktop browser profiles to create and join a private invite room. Protocol changes must stay compatible with v1, preserve the 60 Hz authoritative simulation and 20 Hz patch rate, and update room and netcode tests.
+
+For offline solo-only work, start the static server instead:
 
 ```bash
 python3 serve.py
@@ -54,6 +62,8 @@ npm run test:browser
 ```
 
 Stop before committing if the validator or reachability tests fail.
+
+Before opening a pull request, run `npm test`, `npm run test:browser`, and `git diff --check`. If you change Docker or Render configuration, also build the image and check `/health` from the running container when Docker is available. Do not create a Render service or publish a deployment as part of a contribution.
 
 ## Recipe checklist
 
@@ -75,3 +85,7 @@ Use the pull request template. Include the command output, a browser screenshot,
 By submitting a pull request, you represent that you have authority to contribute its contents. You license contributed code under the [MIT License](./LICENSE). You license accepted original images and synthesized audio under [CC BY-NC 4.0](./ASSET-LICENSE.md). Trademark submissions are not accepted through this contribution process, including the Savoria name, wordmark, and logo.
 
 This is a project licensing choice, not legal advice.
+
+## Dependency notices
+
+Contributor-facing versions, upstream projects, and licenses are in [CREDITS.md](./CREDITS.md). Keep `vendor/COLYSEUS-SDK-LICENSE.txt` with its SDK bundle. Do not replace it with a copied summary.

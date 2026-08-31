@@ -1,20 +1,35 @@
 # Savoria
 
-Savoria is a desktop food platformer. Choose a chef, cross Pasta Plains and Sushi Shores, collect tomatoes, and clear four hand-built courses.
+Savoria is a desktop food platformer. Choose a chef, cross Pasta Plains and Sushi Shores, collect tomatoes, and clear four hand-built courses. Solo play is build-free. Online Co-op adds private two-player rooms with a server-authoritative simulation.
 
-The playable home hub shows real save progress, the unchanged chef party, and both released worlds.
+## Play locally
 
-## Play
+Install Node 22 dependencies for combined solo and online play:
 
-The game route is [`/play/`](./play/). It is not hosted or published from this repository yet. Run it locally first:
+```bash
+npm ci
+npm start
+```
+
+Open <http://127.0.0.1:2567/>. The combined service hosts the game, WebSockets, and `GET /health`, which returns `{ "ok": true }`.
+
+For offline solo development without Node, keep using:
 
 ```bash
 python3 serve.py
 ```
 
-Open <http://127.0.0.1:8977/>. Use a desktop browser at least 900 by 620 pixels.
+Open <http://127.0.0.1:8977/>. Offline solo does not provide Online Co-op.
 
-Controls: A/D or Left/Right to move, Shift to run, Space or Up to jump, and Escape to pause.
+Use a desktop browser at least 900 by 620 pixels. Controls: A/D or Left/Right to move, Shift to run, Space or Up to jump, and Escape to pause.
+
+## Online Co-op
+
+Choose **Online Co-op** from the home screen to create a private room or join one with a six-character invite code. Share the resulting private invite link only with the person you want to play with. Rooms are unlisted, accept exactly two browser players, and do not offer public matchmaking or accounts.
+
+The protocol is v1. The server simulates gameplay at 60 Hz and sends state patches at 20 Hz. Each client predicts local movement immediately, renders the other player with 100 ms interpolation, and smooths ordinary authoritative corrections over 65 ms. Respawns, doors, and checkpoints snap immediately.
+
+If a player disconnects, the room pauses. They have 60 seconds to reconnect, then 5 seconds to complete the reconnect handshake. A restart cannot preserve reconnect tokens or active rooms.
 
 ## Why the browser build
 
@@ -47,15 +62,15 @@ Supported primitives are `run`, `gap`, `rise`, `steps`, `river`, `plats`, `roll`
 
 ## Local setup
 
-Runtime play needs no build step. Tests need Node and the package dependencies.
+Runtime play needs no browser build step. Tests need Node 22 and the package dependencies.
 
 ```bash
-npm install
+npm ci
 npm test
 npm run test:browser
 ```
 
-`npm test` includes validator, compiler, save, rendering, and released-course reachability coverage. `npm run test:browser` starts `python3 serve.py` when no local server is already running.
+`npm test` runs unit and server tests, including static hosting and `/health`. `npm run test:browser` starts `python3 serve.py` when no local server is already running.
 
 ## Architecture
 
@@ -63,7 +78,22 @@ npm run test:browser
 - `play/index.html` is the game shell.
 - `js/levels/` contains the level DSL, validation, compiler, themes, and released World 1 and World 2 data.
 - `js/core/`, `js/gameplay/`, and `js/ui/` own rendering, game rules, and screens.
-- `tests/unit/` covers game logic and level reachability. `tests/browser/` covers the desktop flow.
+- `js/multiplayer/` contains protocol v1, lobby, connection, prediction, and interpolation code.
+- `server/` provides one Node process for static files, `/health`, WebSockets, private rooms, and the authoritative course simulation.
+- `tests/unit/` covers game logic and netcode. `tests/server/` covers rooms, protocol behavior, static hosting, and packaging. `tests/browser/` covers the desktop flow.
+
+## Docker and hosting
+
+Build and run the provider-neutral Node 22 image:
+
+```bash
+docker build -t savoria .
+docker run --rm -p 2567:2567 savoria
+```
+
+Then open <http://127.0.0.1:2567/> and verify <http://127.0.0.1:2567/health>. On another Node-capable host, build this Dockerfile, route its public port to the container port, and let the host set `PORT`. No secrets or database are required.
+
+[`render.yaml`](./render.yaml) is a free Render Blueprint template. Creating a Render service is intentionally outside this repository task. Free Render services can sleep after inactivity, quotas and plan terms can change, and any deploy or restart erases active in-memory rooms. Reconnect tokens cannot survive a restart. Completed local progress remains in each player's browser.
 
 ## Contribute
 
@@ -78,7 +108,7 @@ Released game content includes two complete worlds:
 
 Worlds 3 through 6 live in `js/experimental/`. They are hidden experimental data. They are not part of the released game, public map, or progression.
 
-This repository does not claim a hosted build, public repository, remote CI run, or Pages deployment.
+This repository includes self-hosting templates. It does not claim a hosted build, Render service, public repository, remote CI run, or Pages deployment.
 
 ## Licensing
 
@@ -88,4 +118,4 @@ This is a project licensing choice, not legal advice.
 
 ## Credits
 
-See [CREDITS.md](./CREDITS.md), including the retained Three.js notice.
+See [CREDITS.md](./CREDITS.md), including the retained Three.js and Colyseus SDK notices.
