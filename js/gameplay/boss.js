@@ -1,6 +1,7 @@
 import { AABB } from '../core/aabb.js';
 import { sfx } from '../audio/sfx.js';
 import { spawnEnemy } from './entities.js';
+import { nextSeededRandom } from './seeded-random.js';
 
 export function updateBoss(context, dt) {
   const boss = context.bossState;
@@ -30,7 +31,7 @@ export function updateBoss(context, dt) {
         boss.chargeDir = Math.sign(player.pos.x - sprite.position.x) || 1;
       }
     } else if (boss.mode === 'telegraph') {
-      sprite.position.x += (Math.random() - 0.5) * 0.14;
+      sprite.position.x += (nextSeededRandom(context) - 0.5) * 0.14;
       if (boss.t <= 0) {
         boss.mode = 'charge';
         boss.t = 1.8;
@@ -49,7 +50,7 @@ export function updateBoss(context, dt) {
       sprite.position.y = boss.home[1] - 1 + Math.sin(context.elapsed * 2) * 0.1;
       if (boss.t <= 0) {
         boss.mode = 'idle';
-        boss.t = 1 + Math.random();
+        boss.t = 1 + nextSeededRandom(context);
       }
     }
   }

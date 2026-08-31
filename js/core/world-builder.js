@@ -1,5 +1,6 @@
 import { AABB } from './aabb.js';
 import { spawnEnemy } from '../gameplay/entities.js';
+import { seedToUint32 } from '../gameplay/seeded-random.js';
 import { WORLD_ONE_VISUALS } from '../visuals/world-one-manifest.js';
 import {
   collectVisualAssets,
@@ -707,6 +708,7 @@ export function buildWorldScene({ THREE, scene, level, textures }) {
     bossState: null,
     checkpointFlag: null,
     goalObj: null,
+    randomState: seedToUint32(level.id),
   };
 
   const theme = level.theme;
@@ -769,6 +771,7 @@ export function buildWorldScene({ THREE, scene, level, textures }) {
     checkpointFlag: state.checkpointFlag,
     goalObject: state.goalObj,
     bossState: state.bossState,
+    randomState: state.randomState,
     sun,
     updateBackground,
     dispose,

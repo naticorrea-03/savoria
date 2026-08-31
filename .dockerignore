@@ -1,0 +1,13 @@
+.git
+.worktrees
+.superpowers
+node_modules
+npm-debug.log*
+
+.env
+.env.*
+
+coverage
+playwright-report
+test-results
+docs/verification/screenshots
