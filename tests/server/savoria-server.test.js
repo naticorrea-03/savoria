@@ -68,6 +68,7 @@ test('room state exposes the complete lobby contract and rejects a third player'
   assert.equal(state.selectedLevelId, '1-1');
   assert.equal(state.timer, 0);
   assert.equal(state.tomatoCount, 0);
+  assert.equal(state.authoritativeTick, 0);
   assert.equal(state.players.size, 2);
   assert.ok(state.checkpoint);
   assert.ok(state.enemies);
@@ -225,12 +226,32 @@ test('valid input drives the authoritative 60 Hz simulation and malformed input 
     jumpPressed: false,
     jumpHeld: false,
   }), { ok: true });
+  assert.equal(serverRoom.state.players.get(host.sessionId).acceptedInputCount, 1);
 
   const firstTick = serverRoom.courseState.tick;
   await serverRoom.waitForNextTimestep();
   await serverRoom.waitForNextTimestep();
   assert.ok(serverRoom.courseState.tick >= firstTick + 2);
+  assert.equal(serverRoom.state.authoritativeTick, serverRoom.courseState.tick);
   assert.ok(serverRoom.state.players.get(host.sessionId).positionX > startX);
+  await guest.leave();
+});
+
+test('accepted input acknowledgement is ordered without changing the four-field payload', async () => {
+  const { host, guest, serverRoom } = await createStartedRoom();
+  const payload = {
+    axis: 1,
+    running: false,
+    jumpPressed: false,
+    jumpHeld: false,
+  };
+
+  await host.request(MESSAGE.INPUT, payload);
+  await host.request(MESSAGE.INPUT, { ...payload, axis: -1 });
+
+  const player = serverRoom.state.players.get(host.sessionId);
+  assert.equal(player.acceptedInputCount, 2);
+  assert.deepEqual(Object.keys(payload).sort(), ['axis', 'jumpHeld', 'jumpPressed', 'running']);
   await guest.leave();
 });
 
@@ -246,6 +267,17 @@ test('pause and resume freeze and restart the shared timer', async () => {
   await serverRoom.waitForNextTimestep();
   assert.equal(serverRoom.state.phase, 'paused');
   assert.equal(serverRoom.state.timer, pausedTimer);
+  const acceptedBeforePause = serverRoom.state.players.get(host.sessionId).acceptedInputCount;
+  assert.deepEqual(await host.request(MESSAGE.INPUT, {
+    axis: 1,
+    running: false,
+    jumpPressed: false,
+    jumpHeld: false,
+  }), { ok: false });
+  assert.equal(
+    serverRoom.state.players.get(host.sessionId).acceptedInputCount,
+    acceptedBeforePause,
+  );
 
   await host.request(MESSAGE.RESUME, {});
   await serverRoom.waitForNextTimestep();

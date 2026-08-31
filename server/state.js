@@ -7,6 +7,7 @@ export const PlayerState = schema({
   characterId: t.string(),
   connected: t.boolean(),
   ready: t.boolean(),
+  acceptedInputCount: t.uint32(),
   positionX: t.number(),
   positionY: t.number(),
   positionZ: t.number(),
@@ -92,6 +93,7 @@ export const RoomState = schema({
   protocolVersion: t.uint8(),
   hostPlayerId: t.string(),
   selectedLevelId: t.string(),
+  authoritativeTick: t.uint32(),
   timer: t.number(),
   tomatoCount: t.uint16(),
   checkpoint: CheckpointState,
@@ -109,6 +111,7 @@ export function createLobbyState(protocolVersion, selectedLevelId) {
   state.protocolVersion = protocolVersion;
   state.hostPlayerId = '';
   state.selectedLevelId = selectedLevelId;
+  state.authoritativeTick = 0;
   state.timer = 0;
   state.tomatoCount = 0;
   resetCheckpoint(state.checkpoint);
@@ -129,11 +132,13 @@ export function createLobbyPlayer(
   player.characterId = characterId;
   player.connected = true;
   player.ready = false;
+  player.acceptedInputCount = 0;
   applySimulationPlayer(player, {});
   return player;
 }
 
 export function applySimulationSnapshot(state, snapshot) {
+  state.authoritativeTick = snapshot.tick;
   state.timer = snapshot.timer;
   state.tomatoCount = snapshot.tomatoCount;
   applyCheckpoint(state.checkpoint, snapshot.checkpoint);
@@ -190,6 +195,7 @@ export function applySimulationSnapshot(state, snapshot) {
 }
 
 export function resetCourseState(state) {
+  state.authoritativeTick = 0;
   state.timer = 0;
   state.tomatoCount = 0;
   resetCheckpoint(state.checkpoint);
@@ -200,6 +206,7 @@ export function resetCourseState(state) {
   state.movingPlatforms.splice(0, state.movingPlatforms.length);
   for (const player of state.players.values()) {
     player.ready = false;
+    player.acceptedInputCount = 0;
     applySimulationPlayer(player, {});
   }
 }

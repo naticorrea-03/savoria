@@ -24,6 +24,7 @@ export class MultiplayerClient {
     this.resetNetcode = resetNetcode;
     this.sdkClient = null;
     this.room = null;
+    this.intentionalLeaves = new WeakSet();
   }
 
   async createRoom(options) {
@@ -50,6 +51,10 @@ export class MultiplayerClient {
     this.room?.send(MESSAGE.START, {});
   }
 
+  resume() {
+    this.room?.send(MESSAGE.RESUME, {});
+  }
+
   sendInput(input) {
     if (!isValidInput(input)) throw new Error('Invalid multiplayer input');
     this.room?.send(MESSAGE.INPUT, input);
@@ -57,8 +62,10 @@ export class MultiplayerClient {
 
   async leave() {
     const room = this.room;
+    if (!room) return;
+    this.intentionalLeaves.add(room);
     this.room = null;
-    if (room) await room.leave(true);
+    await room.leave(true);
   }
 
   get sessionId() {
@@ -98,9 +105,10 @@ export class MultiplayerClient {
       room.send(MESSAGE.RECONNECT, { protocolVersion: PROTOCOL_VERSION });
       this.onStatus({ kind: 'connected', message: 'Back in the room.' });
     });
-    room.onLeave((code) => {
-      if (code === 1000 || code === 4000) return;
+    room.onLeave(() => {
+      const intentional = this.intentionalLeaves.delete(room);
       this.room = null;
+      if (intentional) return;
       this.onStatus({
         kind: 'expired',
         message: 'That room expired. Create a new room or enter another code.',
@@ -134,6 +142,7 @@ export function toLobbyView(state, localSessionId) {
       characterId: player.characterId,
       ready: player.ready === true,
       connected: player.connected !== false,
+      acceptedInputCount: Number(player.acceptedInputCount) || 0,
       isLocal: sessionId === localSessionId,
       color: playerMarkerColor(player.identityId || player.playerId),
       position: {
@@ -160,6 +169,7 @@ export function toLobbyView(state, localSessionId) {
   const localPlayer = players.find(({ isLocal }) => isLocal);
   return {
     phase: state?.phase ?? 'lobby',
+    authoritativeTick: Number(state?.authoritativeTick) || 0,
     selectedLevelId: state?.selectedLevelId ?? '1-1',
     hostPlayerId: state?.hostPlayerId ?? '',
     isHost: state?.hostPlayerId === localSessionId,

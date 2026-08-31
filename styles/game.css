@@ -1168,12 +1168,101 @@ h1.screen-title {
 }
 
 .online-screen,
-.lobby-screen {
+.lobby-screen,
+.online-course-screen {
   background:
     linear-gradient(180deg, rgb(37 98 137 / 55%), rgb(77 32 15 / 68%)),
     url('../assets/home/savoria-kingdom-hub.png') center / cover no-repeat;
   color: var(--espresso);
   padding: 28px;
+}
+
+.online-course-panel {
+  background: linear-gradient(145deg, rgb(255 253 239 / 98%), rgb(255 228 170 / 98%));
+  border: 3px solid #9d581d;
+  border-radius: 26px;
+  box-shadow: inset 0 0 0 4px rgb(255 255 255 / 45%), 0 8px 0 #66310f, 0 24px 54px rgb(45 20 7 / 42%);
+  padding: 24px;
+  width: min(980px, 94vw);
+}
+
+.online-course-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.online-course-header h1 {
+  color: #67290f;
+  font-family: var(--display);
+  font-size: clamp(30px, 3vw, 44px);
+  margin: 4px 0 12px;
+}
+
+#multiplayer-course-code {
+  color: #1c689d;
+  font-family: var(--display);
+  font-size: 24px;
+  letter-spacing: 0.12em;
+}
+
+.multiplayer-course-stage {
+  background:
+    linear-gradient(180deg, #78c7ed 0 58%, #a7da6f 58% 66%, #84512a 66% 100%);
+  border: 4px solid #7a3e17;
+  border-radius: 20px;
+  box-shadow: inset 0 0 0 4px rgb(255 255 255 / 28%);
+  height: min(54vh, 430px);
+  overflow: hidden;
+  position: relative;
+}
+
+.multiplayer-course-stage::before {
+  background: repeating-linear-gradient(90deg, rgb(255 255 255 / 20%) 0 2px, transparent 2px 90px);
+  content: '';
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  transform: translateX(calc(var(--camera-x, 0) * -2px));
+}
+
+.multiplayer-course-stage:focus-visible {
+  outline: 5px solid #2f80ed;
+  outline-offset: 4px;
+}
+
+.multiplayer-course-player {
+  align-items: center;
+  bottom: var(--player-y);
+  display: flex;
+  flex-direction: column;
+  left: calc(var(--player-x) + var(--player-offset, 0px));
+  position: absolute;
+  transform: translate(-50%, 50%);
+  transition: left 50ms linear, bottom 50ms linear;
+}
+
+.multiplayer-course-player img {
+  background: rgb(255 255 255 / 72%);
+  border: 6px solid var(--player-color);
+  border-radius: 50%;
+  height: 78px;
+  object-fit: contain;
+  width: 78px;
+}
+
+.multiplayer-course-player strong {
+  background: #fff9dc;
+  border: 3px solid var(--player-color);
+  border-radius: 999px;
+  color: #56260e;
+  font: 850 12px var(--utility);
+  margin-top: -5px;
+  padding: 4px 9px;
+}
+
+.multiplayer-course-player.is-local strong::after {
+  content: ' · You';
 }
 
 .online-panel,

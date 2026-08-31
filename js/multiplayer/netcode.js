@@ -13,12 +13,11 @@ export class RemoteInterpolation {
     return this.samples.length;
   }
 
-  push(value, receivedAt) {
-    const sample = { value: copyPosition(value), receivedAt };
+  push(value, authoritativeTick, receivedAt) {
     const last = this.samples.at(-1);
-    if (last && receivedAt < last.receivedAt) return false;
-    if (last && receivedAt === last.receivedAt) this.samples[this.samples.length - 1] = sample;
-    else this.samples.push(sample);
+    if (last && authoritativeTick <= last.authoritativeTick) return false;
+    const sample = { value: copyPosition(value), authoritativeTick, receivedAt };
+    this.samples.push(sample);
     while (this.samples.length > 32) this.samples.shift();
     return true;
   }
@@ -41,8 +40,10 @@ export class RemoteInterpolation {
     return copyPosition(last.value);
   }
 
-  reset(value, receivedAt = 0) {
-    this.samples = value ? [{ value: copyPosition(value), receivedAt }] : [];
+  reset(value, authoritativeTick = 0, receivedAt = 0) {
+    this.samples = value
+      ? [{ value: copyPosition(value), authoritativeTick, receivedAt }]
+      : [];
   }
 }
 
@@ -64,10 +65,9 @@ export class LocalPrediction {
   }
 
   applyInput(sequence, controls, seconds, now) {
-    this.predicted = copyPosition(this.simulate(this.sample(now), controls, seconds));
+    this.predicted = copyPosition(this.simulate(this.predicted, controls, seconds));
     this.pending.push({ sequence, controls: { ...controls }, seconds });
-    this.correction = null;
-    return copyPosition(this.predicted);
+    return this.sample(now);
   }
 
   reconcile(authoritative, acknowledgedSequence, {
@@ -87,8 +87,11 @@ export class LocalPrediction {
     }
     this.predicted = replayed;
     this.correction = {
-      from: visible,
-      to: copyPosition(replayed),
+      offset: {
+        x: visible.x - replayed.x,
+        y: visible.y - replayed.y,
+        z: visible.z - replayed.z,
+      },
       startedAt: now,
     };
     return copyPosition(visible);
@@ -101,7 +104,12 @@ export class LocalPrediction {
       this.correction = null;
       return copyPosition(this.predicted);
     }
-    return lerpPosition(this.correction.from, this.correction.to, progress);
+    const scale = 1 - progress;
+    return {
+      x: this.predicted.x + this.correction.offset.x * scale,
+      y: this.predicted.y + this.correction.offset.y * scale,
+      z: this.predicted.z + this.correction.offset.z * scale,
+    };
   }
 
   reset(value) {

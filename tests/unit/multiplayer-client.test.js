@@ -97,9 +97,13 @@ test('reconnect clears netcode state and completes protocol handshake', async ()
 
   room.onDrop.emit();
   room.onReconnect.emit();
+  client.resume();
 
   assert.deepEqual(resets, ['drop', 'reconnect']);
-  assert.deepEqual(room.sent.at(-1), [MESSAGE.RECONNECT, { protocolVersion: 1 }]);
+  assert.deepEqual(room.sent.slice(-2), [
+    [MESSAGE.RECONNECT, { protocolVersion: 1 }],
+    [MESSAGE.RESUME, {}],
+  ]);
 });
 
 test('client sends only the exact multiplayer input contract', async () => {
@@ -159,9 +163,57 @@ test('failed reconnection exposes expired-room recovery', async () => {
   });
 });
 
+test('unexpected consent-code closure exposes expired-room recovery', async () => {
+  const room = fakeRoom();
+  const statuses = [];
+  class Client {
+    async joinById() { return room; }
+  }
+  const client = new MultiplayerClient({
+    identity: { playerId: 'stable-player', guestName: 'Nati' },
+    loadSdk: async () => ({ Client }),
+    onStatus: (status) => statuses.push(status),
+  });
+  await client.joinRoom('ABC234', {
+    characterId: 'chefno',
+    unlockedLevelIds: ['1-1'],
+  });
+
+  room.onLeave.emit(4000, 'Reconnect handshake expired');
+
+  assert.equal(client.room, null);
+  assert.equal(statuses.at(-1).kind, 'expired');
+});
+
+test('intentional local leave ignores its consent-code closure', async () => {
+  const room = fakeRoom();
+  const statuses = [];
+  room.leave = async function leave() {
+    setTimeout(() => this.onLeave.emit(4000, 'consented'), 0);
+  };
+  class Client {
+    async joinById() { return room; }
+  }
+  const client = new MultiplayerClient({
+    identity: { playerId: 'stable-player', guestName: 'Nati' },
+    loadSdk: async () => ({ Client }),
+    onStatus: (status) => statuses.push(status),
+  });
+  await client.joinRoom('ABC234', {
+    characterId: 'chefno',
+    unlockedLevelIds: ['1-1'],
+  });
+
+  await client.leave();
+  await new Promise((resolve) => setTimeout(resolve, 5));
+
+  assert.deepEqual(statuses, []);
+});
+
 test('lobby view keeps duplicate chefs distinct and camera anchored locally', () => {
   const state = {
     phase: 'lobby',
+    authoritativeTick: 42,
     hostPlayerId: 'session-host',
     selectedLevelId: '1-1',
     players: new Map([
@@ -175,6 +227,7 @@ test('lobby view keeps duplicate chefs distinct and camera anchored locally', ()
         positionX: 3,
         positionY: 4,
         positionZ: 0,
+        acceptedInputCount: 7,
       }],
       ['session-guest', {
         playerId: 'session-guest',
@@ -186,6 +239,7 @@ test('lobby view keeps duplicate chefs distinct and camera anchored locally', ()
         positionX: 30,
         positionY: 5,
         positionZ: 0,
+        acceptedInputCount: 3,
       }],
     ]),
   };
@@ -195,6 +249,8 @@ test('lobby view keeps duplicate chefs distinct and camera anchored locally', ()
   assert.equal(view.players[0].characterId, view.players[1].characterId);
   assert.notEqual(view.players[0].color, view.players[1].color);
   assert.deepEqual(view.cameraTarget, { x: 3, y: 4, z: 0 });
+  assert.equal(view.authoritativeTick, 42);
+  assert.equal(view.players[0].acceptedInputCount, 7);
   assert.equal(view.isHost, true);
   assert.equal(view.canStart, false);
 });

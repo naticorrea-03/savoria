@@ -180,6 +180,30 @@
       </section>
     </div>
 
+    <div id="online-course-screen" class="screen online-course-screen hidden" data-ui-state="online-course" aria-labelledby="multiplayer-course-title">
+      <section class="online-course-panel">
+        <header class="online-course-header">
+          <div>
+            <p class="panel-step">Live private kitchen</p>
+            <h1 id="multiplayer-course-title">Co-op Course</h1>
+          </div>
+          <strong id="multiplayer-course-code">------</strong>
+        </header>
+        <div
+          id="multiplayer-course-stage"
+          class="multiplayer-course-stage"
+          role="application"
+          aria-label="Co-op course. Use arrow keys or A and D to move."
+          tabindex="0"
+          data-primary
+        >
+          <div id="multiplayer-course-players" class="multiplayer-course-players"></div>
+        </div>
+        <p id="multiplayer-course-status" class="online-status" role="status" aria-live="polite">Course connected.</p>
+        <button class="text-button" type="button" data-action="leave-lobby">Leave room</button>
+      </section>
+    </div>
+
     <div id="char-screen" class="screen hidden" data-ui-state="characters">
       <p class="panel-step">Choose your chef</p>
       <h1 class="screen-title">Who is cooking?</h1>

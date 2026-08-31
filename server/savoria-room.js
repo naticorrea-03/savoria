@@ -200,9 +200,12 @@ export class SavoriaRoom extends Room {
     this.onMessage(MESSAGE.INPUT, (client, payload) => {
       this.consumeMessage(client.sessionId, 'input', INPUT_RATE_LIMIT_PER_SECOND);
       if (!isValidInput(payload)) throw applicationError('Invalid input message');
-      if (this.state.phase !== 'playing') throw applicationError('Input requires active play');
       this.requirePlayer(client.sessionId);
+      if (this.state.phase === 'paused') return { ok: false };
+      if (this.state.phase !== 'playing') throw applicationError('Input requires active play');
+      const player = this.state.players.get(client.sessionId);
       this.latestInputs.set(client.sessionId, { ...payload });
+      player.acceptedInputCount += 1;
       return { ok: true };
     });
 
@@ -277,6 +280,7 @@ export class SavoriaRoom extends Room {
       seed: `room-${this.roomId}`,
       players,
     });
+    for (const player of this.state.players.values()) player.acceptedInputCount = 0;
     this.state.phase = 'playing';
     applySimulationSnapshot(this.state, createCourseSnapshot(this.courseState));
     await this.lock();

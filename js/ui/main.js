@@ -21,6 +21,7 @@ import {
   LOCAL_CORRECTION_MS,
   REMOTE_INTERPOLATION_MS,
 } from '../multiplayer/netcode.js';
+import { MultiplayerRunLoop } from '../multiplayer/run-loop.js';
 import {
   RELEASED_LEVELS,
   RELEASED_WORLDS,
@@ -58,6 +59,8 @@ let lobbyView = null;
 let multiplayerStatus = { kind: 'idle', message: '' };
 let multiplayerSdkLoaded = false;
 let netcodeResetCount = 0;
+let multiplayerRunLoop = null;
+let multiplayerPresentation = null;
 
 function dispatch(event) {
   const previous = uiState;
@@ -293,9 +296,9 @@ function multiplayerJoinOptions() {
 }
 
 function setMultiplayerScreen(screen) {
-  $('title-screen').classList.toggle('hidden', screen !== 'title');
-  $('online-screen').classList.toggle('hidden', screen !== 'online');
-  $('lobby-screen').classList.toggle('hidden', screen !== 'lobby');
+  for (const id of ['title', 'online', 'lobby', 'online-course']) {
+    $(`${id}-screen`).classList.toggle('hidden', screen !== id);
+  }
   app.dataset.screen = screen;
   const root = $(`${screen}-screen`);
   const primary = root?.querySelector('[data-primary]:not(.hidden)') ?? root;
@@ -311,6 +314,7 @@ function openOnline() {
 }
 
 function openHome() {
+  stopMultiplayerRunLoop();
   $('online-screen').classList.add('hidden');
   $('lobby-screen').classList.add('hidden');
   const url = new URL(location.href);
@@ -369,6 +373,21 @@ function createPlayerCard(player, view) {
 
 function renderLobby(view) {
   lobbyView = view;
+  if (view.phase === 'playing') {
+    enterMultiplayerCourse(view);
+    return;
+  }
+  if (multiplayerRunLoop && app.dataset.screen === 'online-course') {
+    multiplayerRunLoop.updateState(view, performance.now());
+    if (view.phase === 'paused') {
+      $('multiplayer-course-status').textContent = view.players.every(({ connected }) => connected)
+        ? 'Both chefs reconnected. Resuming course.'
+        : 'Waiting for the other chef to reconnect.';
+      return;
+    }
+    stopMultiplayerRunLoop();
+    if (view.phase === 'lobby') setMultiplayerScreen('lobby');
+  }
   const players = $('lobby-players');
   players.replaceChildren(...view.players.map((player) => createPlayerCard(player, view)));
   $('lobby-room-code').textContent = multiplayerClient?.roomCode ?? '------';
@@ -410,8 +429,74 @@ function renderLobby(view) {
   }
 }
 
+function enterMultiplayerCourse(view) {
+  if (!multiplayerRunLoop) {
+    multiplayerRunLoop = new MultiplayerRunLoop({
+      sendInput: (input) => multiplayerClient?.sendInput(input),
+      requestResume: () => multiplayerClient?.resume(),
+      onPresentation: renderMultiplayerPresentation,
+      inputTarget: window,
+    });
+  }
+  multiplayerRunLoop.updateState(view, performance.now());
+  $('multiplayer-course-code').textContent = multiplayerClient?.roomCode ?? '------';
+  if (app.dataset.screen !== 'online-course') {
+    setMultiplayerScreen('online-course');
+    multiplayerRunLoop.start();
+  }
+}
+
+function renderMultiplayerPresentation(presentation) {
+  multiplayerPresentation = presentation;
+  const camera = presentation.cameraTarget ?? { x: 0, y: 0, z: 0 };
+  const container = $('multiplayer-course-players');
+  const existing = new Map(
+    [...container.children].map((marker) => [marker.dataset.multiplayerPlayer, marker]),
+  );
+  const activeIds = new Set();
+  presentation.players.forEach((player, index) => {
+    activeIds.add(player.sessionId);
+    let marker = existing.get(player.sessionId);
+    if (!marker) {
+      marker = document.createElement('article');
+      marker.dataset.multiplayerPlayer = player.sessionId;
+      const image = document.createElement('img');
+      image.alt = '';
+      const name = document.createElement('strong');
+      marker.append(image, name);
+      container.append(marker);
+    }
+    marker.className = `multiplayer-course-player${player.isLocal ? ' is-local' : ''}`;
+    marker.dataset.characterId = player.characterId;
+    marker.style.setProperty('--player-color', player.color);
+    marker.style.setProperty('--player-x', `${Math.max(8, Math.min(92, 50 + (player.position.x - camera.x) * 4))}%`);
+    marker.style.setProperty('--player-y', `${Math.max(12, Math.min(72, 20 + player.position.y * 5))}%`);
+    marker.style.setProperty(
+      '--player-offset',
+      `${(index - (presentation.players.length - 1) / 2) * 90}px`,
+    );
+    marker.setAttribute('aria-label', `${player.guestName}${player.isLocal ? ', you' : ''}`);
+    const character = CHARACTERS.find(({ id }) => id === player.characterId);
+    const image = marker.querySelector('img');
+    image.src = character?.img ?? CHARACTERS[0].img;
+    marker.querySelector('strong').textContent = player.guestName;
+    container.append(marker);
+  });
+  for (const [sessionId, marker] of existing) {
+    if (!activeIds.has(sessionId)) marker.remove();
+  }
+  $('multiplayer-course-stage').style.setProperty('--camera-x', `${camera.x}`);
+}
+
+function stopMultiplayerRunLoop() {
+  multiplayerRunLoop?.stop();
+  multiplayerRunLoop = null;
+  multiplayerPresentation = null;
+}
+
 function handleMultiplayerStatus(status) {
   if (status.kind === 'expired') {
+    stopMultiplayerRunLoop();
     setOnlineStatus(status.message, status.kind);
     openOnline();
     return;
@@ -437,7 +522,10 @@ async function connectMultiplayer(mode) {
     },
     onState: renderLobby,
     onStatus: handleMultiplayerStatus,
-    resetNetcode: () => { netcodeResetCount += 1; },
+    resetNetcode: () => {
+      netcodeResetCount += 1;
+      multiplayerRunLoop?.reset();
+    },
   });
 
   try {
@@ -457,6 +545,7 @@ async function connectMultiplayer(mode) {
 }
 
 async function leaveLobby() {
+  stopMultiplayerRunLoop();
   await multiplayerClient?.leave();
   multiplayerClient = null;
   lobbyView = null;
@@ -612,6 +701,7 @@ window.__savoriaTest = {
     get status() { return { ...multiplayerStatus }; },
     get sdkLoaded() { return multiplayerSdkLoaded; },
     get netcodeResetCount() { return netcodeResetCount; },
+    get presentation() { return multiplayerPresentation; },
     timing: {
       remoteInterpolationMs: REMOTE_INTERPOLATION_MS,
       localCorrectionMs: LOCAL_CORRECTION_MS,

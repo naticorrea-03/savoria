@@ -74,8 +74,8 @@ test('two clients share an invite lobby with independent names and duplicate che
     for (const page of [host, guest]) {
       await expect(page.locator('#app')).toHaveAttribute('data-screen', 'lobby');
       await expect(page.locator('.lobby-player')).toHaveCount(2);
-      await expect(page.getByText('Nati', { exact: true })).toBeVisible();
-      await expect(page.getByText('Alex', { exact: true })).toBeVisible();
+      await expect(page.locator('#lobby-players').getByText('Nati', { exact: true })).toBeVisible();
+      await expect(page.locator('#lobby-players').getByText('Alex', { exact: true })).toBeVisible();
       await expect(page.locator('.lobby-player[data-character-id="fatsio"]')).toHaveCount(2);
     }
 
@@ -105,6 +105,51 @@ test('two clients share an invite lobby with independent names and duplicate che
     ))));
     expect(cameraTargets[0]).not.toBeNull();
     expect(cameraTargets[1]).not.toBeNull();
+
+    await host.getByRole('button', { name: 'Start course' }).click();
+    for (const page of [host, guest]) {
+      await expect(page.locator('#app')).toHaveAttribute('data-screen', 'online-course');
+      await expect(page.locator('[data-multiplayer-player]')).toHaveCount(2);
+      await expect(page.locator('#multiplayer-course-players').getByText('Nati', { exact: true })).toBeVisible();
+      await expect(page.locator('#multiplayer-course-players').getByText('Alex', { exact: true })).toBeVisible();
+      await expect(page.locator('#multiplayer-course-stage')).toBeFocused();
+      const markerBoxes = await page.locator('[data-multiplayer-player]').evaluateAll((markers) => (
+        markers.map((marker) => {
+          const box = marker.getBoundingClientRect();
+          return { left: Math.round(box.left), width: Math.round(box.width) };
+        })
+      ));
+      expect(Math.abs(markerBoxes[0].left - markerBoxes[1].left)).toBeGreaterThanOrEqual(60);
+    }
+
+    const initialX = await host.evaluate(() => (
+      window.__savoriaTest.multiplayer.presentation.local.position.x
+    ));
+    await host.keyboard.down('ArrowRight');
+    await expect.poll(() => host.evaluate(() => (
+      window.__savoriaTest.multiplayer.presentation.local.acceptedInputCount
+    ))).toBeGreaterThan(0);
+    await expect.poll(() => host.evaluate(() => (
+      window.__savoriaTest.multiplayer.presentation.local.position.x
+    ))).toBeGreaterThan(initialX);
+    await host.keyboard.up('ArrowRight');
+
+    for (const page of [host, guest]) {
+      expect(await page.evaluate(() => {
+        const { cameraTarget, local } = window.__savoriaTest.multiplayer.presentation;
+        return cameraTarget.x === local.position.x
+          && cameraTarget.y === local.position.y
+          && cameraTarget.z === local.position.z;
+      })).toBe(true);
+    }
+
+    await guestContext.setOffline(true);
+    await expect.poll(() => host.evaluate(() => (
+      window.__savoriaTest.multiplayer.view.phase
+    ))).toBe('paused');
+    await expect(host.locator('#multiplayer-course-status')).toContainText(
+      'Waiting for the other chef to reconnect',
+    );
   } finally {
     await hostContext.close();
     await guestContext.close();
