@@ -6,8 +6,6 @@ npm-debug.log*
 
 .env
 .env.*
-!.env.example
-!.env.sample
 
 coverage
 playwright-report

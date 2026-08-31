@@ -5,14 +5,19 @@ import { readFile } from 'node:fs/promises';
 const readProjectFile = (file) => readFile(new URL(`../../${file}`, import.meta.url), 'utf8');
 
 test('container and Render templates keep a healthy non-root Node 22 service contract', async () => {
-  const [dockerfile, dockerignore, renderTemplate] = await Promise.all([
+  const [dockerfile, dockerignore, renderTemplate, contributing] = await Promise.all([
     readProjectFile('Dockerfile'),
     readProjectFile('.dockerignore'),
     readProjectFile('render.yaml'),
+    readProjectFile('CONTRIBUTING.md'),
   ]);
 
   assert.match(dockerfile, /^FROM node:22(?:-|\s)/m);
   assert.match(dockerfile, /^USER node$/m);
+  const ownershipIndex = dockerfile.indexOf('RUN chown -R node:node /app');
+  const userIndex = dockerfile.indexOf('\nUSER node');
+  assert.ok(ownershipIndex >= 0, 'the root-owned work directory must be assigned to node');
+  assert.ok(ownershipIndex < userIndex, '/app must be assigned to node before the non-root install');
   assert.match(dockerfile, /^EXPOSE 2567$/m);
   assert.match(dockerfile, /^CMD \["npm", "start"\]$/m);
   assert.match(dockerfile, /^HEALTHCHECK .*fetch\('http:\/\/127\.0\.0\.1:'/m);
@@ -22,6 +27,7 @@ test('container and Render templates keep a healthy non-root Node 22 service con
   assert.match(dockerignore, /^\.worktrees$/m);
   assert.match(dockerignore, /^node_modules$/m);
   assert.match(dockerignore, /^\.env$/m);
+  assert.doesNotMatch(dockerignore, /^!.*\.env/m);
   assert.doesNotMatch(dockerignore, /^vendor$/m);
   assert.doesNotMatch(dockerignore, /^LICENSE$/m);
 
@@ -31,4 +37,6 @@ test('container and Render templates keep a healthy non-root Node 22 service con
   assert.match(renderTemplate, /^\s+plan: free$/m);
   assert.match(renderTemplate, /^\s+healthCheckPath: \/health$/m);
   assert.doesNotMatch(renderTemplate, /envVars:|databases:/);
+
+  assert.doesNotMatch(contributing, /\bnpm install\b/);
 });

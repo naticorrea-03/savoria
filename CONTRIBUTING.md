@@ -13,7 +13,7 @@ Copy this into Claude Code after opening the repository root:
 ```text
 Revise one existing released Savoria course only. First read js/levels/validate.js, js/levels/compiler.js, and js/levels/world-one.js. Edit either 1-1 Farfalle Fields or 1-2 Penne Ridge in js/levels/world-one.js. Keep its ID and revise one compact definition using only supported primitives. Do not add 1-3 or another released course. Then run:
 
-npm install
+npm ci
 node --input-type=module -e "import { WORLD_ONE_LEVELS } from './js/levels/world-one.js'; import { assertValidReleasedLevels } from './js/levels/validate.js'; assertValidReleasedLevels(WORLD_ONE_LEVELS); console.log('Released level DSL valid.');"
 npm test
 npm run test:browser
