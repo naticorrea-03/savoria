@@ -3,20 +3,29 @@ import { buildChefSprite, animateChefSprite } from '../core/chef-sprite.js';
 import { buildWorldScene } from '../core/world-builder.js';
 
 export class MultiplayerCourseRenderer {
-  constructor({ container, level, textures }) {
+  constructor({
+    container,
+    level,
+    textures,
+    antialias = true,
+    pixelRatio = Math.min(devicePixelRatio, 2),
+    shadows = true,
+    minimumFrameMs = 0,
+  }) {
     this.container = container;
     this.level = level;
     this.textures = textures;
     this.destroyed = false;
     this.elapsed = 0;
     this.previousRenderAt = null;
+    this.minimumFrameMs = minimumFrameMs;
     this.playerVisuals = new Map();
     this.projectileVisuals = new Map();
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer = new THREE.WebGLRenderer({ antialias });
     this.renderer.domElement.dataset.multiplayerCourse = 'true';
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.setPixelRatio(pixelRatio);
+    this.renderer.shadowMap.enabled = shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.38;
@@ -38,6 +47,10 @@ export class MultiplayerCourseRenderer {
 
   render(presentation, view, renderedAt = performance.now()) {
     if (this.destroyed || !presentation || !view) return;
+    if (
+      this.previousRenderAt !== null
+      && renderedAt - this.previousRenderAt < this.minimumFrameMs
+    ) return;
     const seconds = this.previousRenderAt === null
       ? 0
       : Math.min(0.05, Math.max(0, (renderedAt - this.previousRenderAt) / 1000));

@@ -551,10 +551,15 @@ async function loadMultiplayerCourse(view) {
     return;
   }
   multiplayerCourseRenderer?.destroy();
+  const browserTestRendering = isBrowserTestMode();
   multiplayerCourseRenderer = new MultiplayerCourseRenderer({
     container: $('multiplayer-course-stage'),
     level,
     textures,
+    antialias: !browserTestRendering,
+    pixelRatio: browserTestRendering ? 1 : Math.min(devicePixelRatio, 2),
+    shadows: !browserTestRendering,
+    minimumFrameMs: browserTestRendering ? 100 : 0,
   });
   $('multiplayer-course-title').textContent = `${definition.id} ${definition.name}`;
   $('multiplayer-course-status').textContent = view.isHost
