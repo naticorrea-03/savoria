@@ -143,13 +143,57 @@ test('two clients share an invite lobby with independent names and duplicate che
       })).toBe(true);
     }
 
+    await host.keyboard.down('ArrowRight');
+    await expect.poll(() => host.evaluate(() => (
+      window.__savoriaTest.multiplayer.pendingInputCount
+    ))).toBeGreaterThan(0);
     await guestContext.setOffline(true);
     await expect.poll(() => host.evaluate(() => (
       window.__savoriaTest.multiplayer.view.phase
-    ))).toBe('paused');
+    )), { timeout: 15_000 }).toBe('paused');
+    await host.keyboard.up('ArrowRight');
     await expect(host.locator('#multiplayer-course-status')).toContainText(
       'Waiting for the other chef to reconnect',
     );
+    expect(await host.evaluate(() => window.__savoriaTest.multiplayer.pendingInputCount)).toBe(0);
+    expect(await host.evaluate(() => {
+      const { view, presentation } = window.__savoriaTest.multiplayer;
+      const authoritative = view.players.find(({ isLocal }) => isLocal).position;
+      return presentation.local.position.x === authoritative.x
+        && presentation.local.position.y === authoritative.y
+        && presentation.local.position.z === authoritative.z;
+    })).toBe(true);
+
+    await guestContext.setOffline(false);
+    await expect.poll(() => guest.evaluate(() => (
+      window.__savoriaTest.multiplayer.phaseHistory.includes('paused')
+    )), { timeout: 15_000 }).toBe(true);
+    for (const page of [host, guest]) {
+      await expect.poll(() => page.evaluate(() => (
+        window.__savoriaTest.multiplayer.view.phase
+      )), { timeout: 15_000 }).toBe('playing');
+      expect(await page.evaluate(() => (
+        window.__savoriaTest.multiplayer.authorityPlaying
+      ))).toBe(true);
+    }
+    expect(await host.evaluate(() => (
+      window.__savoriaTest.multiplayer.autoResumeRequestCount
+    ))).toBe(1);
+    expect(await guest.evaluate(() => (
+      window.__savoriaTest.multiplayer.autoResumeRequestCount
+    ))).toBe(0);
+
+    const resumedAccepted = await host.evaluate(() => (
+      window.__savoriaTest.multiplayer.presentation.local.acceptedInputCount
+    ));
+    await host.keyboard.down('ArrowLeft');
+    await expect.poll(() => host.evaluate(() => (
+      window.__savoriaTest.multiplayer.presentation.local.acceptedInputCount
+    ))).toBeGreaterThan(resumedAccepted);
+    await host.keyboard.up('ArrowLeft');
+    await expect.poll(() => host.evaluate(() => (
+      window.__savoriaTest.multiplayer.pendingInputCount
+    ))).toBe(0);
   } finally {
     await hostContext.close();
     await guestContext.close();

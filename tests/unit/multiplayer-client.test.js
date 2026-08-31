@@ -26,6 +26,7 @@ function fakeRoom() {
     onDrop: signal(),
     onReconnect: signal(),
     onLeave: signal(),
+    reconnection: { minUptime: 5_000 },
     sent: [],
     send(type, payload) { this.sent.push([type, payload]); },
     async leave() {},
@@ -53,6 +54,7 @@ test('online SDK is lazy and create sends protocol and local identity', async ()
   await client.createRoom({ characterId: 'fatsio', unlockedLevelIds: ['1-1'] });
 
   assert.equal(loads, 1);
+  assert.equal(room.reconnection.minUptime, 0);
   assert.deepEqual(calls, [
     ['endpoint', 'ws://127.0.0.1:2567'],
     ['create', ROOM_NAME, {

@@ -95,6 +95,7 @@ export class MultiplayerClient {
 
   bindRoom(room) {
     this.room = room;
+    if (room.reconnection) room.reconnection.minUptime = 0;
     room.onStateChange((state) => this.onState(toLobbyView(state, room.sessionId)));
     room.onDrop(() => {
       this.resetNetcode('drop');

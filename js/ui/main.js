@@ -59,6 +59,8 @@ let lobbyView = null;
 let multiplayerStatus = { kind: 'idle', message: '' };
 let multiplayerSdkLoaded = false;
 let netcodeResetCount = 0;
+let autoResumeRequestCount = 0;
+let multiplayerPhaseHistory = [];
 let multiplayerRunLoop = null;
 let multiplayerPresentation = null;
 
@@ -373,6 +375,9 @@ function createPlayerCard(player, view) {
 
 function renderLobby(view) {
   lobbyView = view;
+  if (multiplayerPhaseHistory.at(-1) !== view.phase) {
+    multiplayerPhaseHistory.push(view.phase);
+  }
   if (view.phase === 'playing') {
     enterMultiplayerCourse(view);
     return;
@@ -433,7 +438,10 @@ function enterMultiplayerCourse(view) {
   if (!multiplayerRunLoop) {
     multiplayerRunLoop = new MultiplayerRunLoop({
       sendInput: (input) => multiplayerClient?.sendInput(input),
-      requestResume: () => multiplayerClient?.resume(),
+      requestResume: () => {
+        autoResumeRequestCount += 1;
+        multiplayerClient?.resume();
+      },
       onPresentation: renderMultiplayerPresentation,
       inputTarget: window,
     });
@@ -512,6 +520,8 @@ async function connectMultiplayer(mode) {
   }
 
   localIdentity = saveGuestName(localStorage, $('online-guest-name').value);
+  autoResumeRequestCount = 0;
+  multiplayerPhaseHistory = [];
   setOnlineStatus(mode === 'create' ? 'Creating your private kitchen…' : 'Joining the kitchen…');
   multiplayerClient = new MultiplayerClient({
     identity: localIdentity,
@@ -701,6 +711,10 @@ window.__savoriaTest = {
     get status() { return { ...multiplayerStatus }; },
     get sdkLoaded() { return multiplayerSdkLoaded; },
     get netcodeResetCount() { return netcodeResetCount; },
+    get autoResumeRequestCount() { return autoResumeRequestCount; },
+    get phaseHistory() { return [...multiplayerPhaseHistory]; },
+    get pendingInputCount() { return multiplayerRunLoop?.pendingInputCount ?? 0; },
+    get authorityPlaying() { return multiplayerRunLoop?.authorityPlaying ?? false; },
     get presentation() { return multiplayerPresentation; },
     timing: {
       remoteInterpolationMs: REMOTE_INTERPOLATION_MS,

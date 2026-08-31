@@ -2,9 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MultiplayerRunLoop } from '../../js/multiplayer/run-loop.js';
 
-function view({ tick = 1, accepted = 0, localX = 0, remoteX = 8 } = {}) {
+function view({
+  tick = 1,
+  accepted = 0,
+  localX = 0,
+  remoteX = 8,
+  phase = 'playing',
+  isHost = true,
+} = {}) {
   return {
-    phase: 'playing',
+    phase,
+    isHost,
     authoritativeTick: tick,
     players: [
       {
@@ -77,16 +85,26 @@ test('state acknowledgements retire pending inputs and reconnect reset clears hi
 });
 
 test('running loop ignores a reordered authoritative room tick', () => {
+  const sent = [];
   let presentation;
   const loop = new MultiplayerRunLoop({
-    sendInput: () => {},
+    sendInput: (input) => sent.push(input),
     onPresentation: (next) => { presentation = next; },
   });
   loop.updateState(view({ tick: 10, localX: 4, remoteX: 12 }), 1_000);
-  loop.updateState(view({ tick: 9, localX: 99, remoteX: 99 }), 1_050);
+  loop.updateState(view({
+    tick: 9,
+    phase: 'paused',
+    localX: 99,
+    remoteX: 99,
+  }), 1_050);
+  loop.press('ArrowRight');
+  loop.advance(1_050);
+  loop.advance(1_067);
 
   assert.notEqual(presentation.local.position.x, 99);
   assert.notEqual(presentation.players.find(({ isLocal }) => !isLocal).position.x, 99);
+  assert.equal(sent.length, 1);
 });
 
 test('paused room state stops input sends until authority resumes play', () => {
@@ -112,19 +130,53 @@ test('high-refresh presentation never exceeds the sixty hertz input stream', () 
   assert.ok(sent.length <= 60, String(sent.length));
 });
 
-test('a fully reconnected paused room requests one resume without duplicate messages', () => {
-  let resumes = 0;
-  const loop = new MultiplayerRunLoop({
+test('only the host requests one automatic resume after both players reconnect', () => {
+  let hostResumes = 0;
+  let guestResumes = 0;
+  const hostLoop = new MultiplayerRunLoop({
     sendInput: () => {},
-    requestResume: () => { resumes += 1; },
+    requestResume: () => { hostResumes += 1; },
   });
-  const paused = { ...view({ tick: 2 }), phase: 'paused' };
+  const guestLoop = new MultiplayerRunLoop({
+    sendInput: () => {},
+    requestResume: () => { guestResumes += 1; },
+  });
+  const hostPaused = view({ tick: 2, phase: 'paused', isHost: true });
+  const guestPaused = view({ tick: 2, phase: 'paused', isHost: false });
 
-  loop.updateState(paused, 1_000);
-  loop.updateState(paused, 1_010);
+  hostLoop.updateState(hostPaused, 1_000);
+  guestLoop.updateState(guestPaused, 1_000);
+  hostLoop.updateState(hostPaused, 1_010);
+  guestLoop.updateState(guestPaused, 1_010);
 
-  assert.equal(resumes, 1);
-  loop.updateState(view({ tick: 3 }), 1_020);
-  loop.updateState({ ...view({ tick: 4 }), phase: 'paused' }, 1_030);
-  assert.equal(resumes, 2);
+  assert.equal(hostResumes, 1);
+  assert.equal(guestResumes, 0);
+});
+
+test('pause snaps to authority and discards in-flight prediction before clean resume', () => {
+  const sent = [];
+  let presentation;
+  const loop = new MultiplayerRunLoop({
+    sendInput: (input) => sent.push(input),
+    onPresentation: (next) => { presentation = next; },
+  });
+  loop.updateState(view(), 1_000);
+  loop.press('ArrowRight');
+  loop.advance(1_000);
+  loop.advance(1_017);
+  assert.equal(loop.pendingInputCount, 1);
+
+  loop.updateState(view({ tick: 2, phase: 'paused', accepted: 0, localX: 4 }), 1_020);
+
+  assert.equal(loop.pendingInputCount, 0);
+  assert.equal(presentation.local.position.x, 4);
+  loop.updateState(view({ tick: 3, accepted: 0, localX: 4 }), 1_030);
+  loop.press('ArrowRight');
+  loop.advance(1_030);
+  loop.advance(1_047);
+  assert.equal(loop.pendingInputCount, 1);
+  assert.equal(sent.length, 2);
+
+  loop.updateState(view({ tick: 4, accepted: 1, localX: 4.12 }), 1_060);
+  assert.equal(loop.pendingInputCount, 0);
 });

@@ -57,12 +57,15 @@ export class MultiplayerRunLoop {
   }
 
   updateState(view, receivedAt = performance.now()) {
+    if (view.authoritativeTick < this.lastAuthoritativeTick) return false;
     this.authorityPlaying = view.phase === 'playing';
     if (!this.authorityPlaying) {
-      this.input.clear();
-      this.inputAccumulator = 0;
+      this.lastView = view;
+      this.lastAuthoritativeTick = view.authoritativeTick;
+      this.snapToAuthority(view, receivedAt);
       if (
         view.phase === 'paused'
+        && view.isHost
         && view.players.length === 2
         && view.players.every(({ connected }) => connected)
         && !this.resumeRequested
@@ -123,22 +126,10 @@ export class MultiplayerRunLoop {
   }
 
   reset() {
-    this.input.clear();
-    this.inputAccumulator = 0;
-    const local = this.lastView?.players.find(({ isLocal }) => isLocal);
-    if (local) {
-      this.inputOrdinal = local.acceptedInputCount;
-      this.localPrediction?.reset(local.position);
-    }
-    for (const player of this.lastView?.players ?? []) {
-      if (player.isLocal) continue;
-      this.remoteInterpolation.get(player.sessionId)?.reset(
-        player.position,
-        this.lastView.authoritativeTick,
-        performance.now(),
-      );
-    }
-    this.publish(performance.now());
+    if (!this.lastView) return;
+    this.authorityPlaying = false;
+    this.resumeRequested = false;
+    this.snapToAuthority(this.lastView, performance.now());
   }
 
   press(code) {
@@ -228,6 +219,34 @@ export class MultiplayerRunLoop {
     this.inputTarget.removeEventListener?.('keydown', this.onKeyDown);
     this.inputTarget.removeEventListener?.('keyup', this.onKeyUp);
     this.inputTarget.removeEventListener?.('blur', this.onBlur);
+  }
+
+  snapToAuthority(view, now) {
+    this.input.clear();
+    this.inputAccumulator = 0;
+    this.previousFrame = null;
+    const local = view.players.find(({ isLocal }) => isLocal);
+    if (local) {
+      this.inputOrdinal = local.acceptedInputCount;
+      if (!this.localPrediction) {
+        this.localPrediction = new LocalPrediction({
+          initial: local.position,
+          simulate: predictPosition,
+        });
+      } else {
+        this.localPrediction.reset(local.position);
+      }
+    }
+    for (const player of view.players) {
+      if (player.isLocal) continue;
+      let remote = this.remoteInterpolation.get(player.sessionId);
+      if (!remote) {
+        remote = new RemoteInterpolation();
+        this.remoteInterpolation.set(player.sessionId, remote);
+      }
+      remote.reset(player.position, view.authoritativeTick, now);
+    }
+    this.publish(now);
   }
 }
 
