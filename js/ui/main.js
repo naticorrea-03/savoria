@@ -669,10 +669,11 @@ async function connectMultiplayer(mode) {
 
 async function leaveLobby() {
   stopMultiplayerCourse();
-  await multiplayerClient?.leave();
+  const leavingClient = multiplayerClient;
   multiplayerClient = null;
   lobbyView = null;
   openOnline();
+  await leavingClient?.leave();
 }
 
 function handleAction(action, target, event) {
