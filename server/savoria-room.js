@@ -1,0 +1,322 @@
+import {
+  CloseCode,
+  ErrorCode,
+  Room,
+  ServerError,
+} from 'colyseus';
+import {
+  createCourseSimulation,
+  createCourseSnapshot,
+  stepCourseSimulation,
+} from '../js/gameplay/course-simulation.js';
+import { RELEASED_LEVELS, buildReleasedLevel } from '../js/levels/index.js';
+import {
+  ACTION_RATE_LIMIT_PER_SECOND,
+  hasExactKeys,
+  INPUT_RATE_LIMIT_PER_SECOND,
+  isValidInput,
+  MAX_MESSAGES_PER_SECOND,
+  MESSAGE,
+  PROTOCOL_VERSION,
+} from '../js/multiplayer/protocol.js';
+import { releaseRoomCode, reserveRoomCode } from './room-code.js';
+import {
+  applySimulationSnapshot,
+  createLobbyPlayer,
+  createLobbyState,
+  resetCourseState,
+} from './state.js';
+
+export const RECONNECTION_WINDOW_SECONDS = 60;
+export const SIMULATION_HZ = 60;
+export const PATCH_HZ = 20;
+
+const DEFAULT_LEVEL_ID = RELEASED_LEVELS[0].id;
+const CHARACTER_IDS = new Set(['fatsio', 'dinnerette', 'chefno']);
+const RELEASED_LEVEL_BY_ID = new Map(RELEASED_LEVELS.map((level) => [level.id, level]));
+const NEUTRAL_INPUT = Object.freeze({
+  axis: 0,
+  running: false,
+  jumpPressed: false,
+  jumpHeld: false,
+});
+
+export class SavoriaRoom extends Room {
+  static reconnectionWindowSeconds = RECONNECTION_WINDOW_SECONDS;
+
+  courseState = null;
+  latestInputs = new Map();
+  campaignUnlocks = new Map();
+  playerProtocolVersions = new Map();
+  messageWindows = new Map();
+  reservationOwnerId = '';
+
+  async onCreate(options) {
+    assertProtocol(options?.protocolVersion);
+    validateJoinOptions(options);
+
+    this.maxClients = 2;
+    this.maxMessagesPerSecond = MAX_MESSAGES_PER_SECOND;
+    this.patchRate = 1000 / PATCH_HZ;
+    this.reservationOwnerId = this.roomId;
+    this.roomId = await reserveRoomCode(this.presence, this.reservationOwnerId);
+    this.state = createLobbyState(PROTOCOL_VERSION, DEFAULT_LEVEL_ID);
+
+    await this.setMatchmaking({
+      private: true,
+      unlisted: true,
+      maxClients: 2,
+      metadata: {
+        inviteCode: this.roomId,
+        private: true,
+        protocolVersion: PROTOCOL_VERSION,
+      },
+    });
+
+    this.registerMessages();
+    this.setFixedTimestep(({ dt }) => this.stepAuthoritativeSimulation(dt), SIMULATION_HZ);
+  }
+
+  onAuth(_client, options) {
+    assertProtocol(options?.protocolVersion);
+    if (this.state.phase !== 'lobby') {
+      throw applicationError('New players cannot join after play begins');
+    }
+    return validateJoinOptions(options);
+  }
+
+  onJoin(client, options) {
+    const normalized = client.auth ?? validateJoinOptions(options);
+    const player = createLobbyPlayer(client.sessionId, normalized.characterId);
+    this.state.players.set(client.sessionId, player);
+    this.campaignUnlocks.set(client.sessionId, normalized.unlockedLevelIds);
+    this.playerProtocolVersions.set(client.sessionId, PROTOCOL_VERSION);
+    this.latestInputs.set(client.sessionId, { ...NEUTRAL_INPUT });
+    if (!this.state.hostPlayerId) this.state.hostPlayerId = client.sessionId;
+  }
+
+  onDrop(client) {
+    const player = this.state.players.get(client.sessionId);
+    if (player) player.connected = false;
+    this.latestInputs.set(client.sessionId, { ...NEUTRAL_INPUT });
+    if (this.courseState && this.state.phase === 'playing') {
+      this.state.phase = 'paused';
+    }
+    this.allowReconnection(client, this.constructor.reconnectionWindowSeconds);
+  }
+
+  onReconnect(client) {
+    assertProtocol(this.playerProtocolVersions.get(client.sessionId));
+    const player = this.state.players.get(client.sessionId);
+    if (!player) throw applicationError('Player is no longer part of this room');
+    player.connected = true;
+    this.latestInputs.set(client.sessionId, { ...NEUTRAL_INPUT });
+  }
+
+  async onLeave(client) {
+    const hadPlayer = this.state.players.has(client.sessionId);
+    this.state.players.delete(client.sessionId);
+    this.campaignUnlocks.delete(client.sessionId);
+    this.playerProtocolVersions.delete(client.sessionId);
+    this.latestInputs.delete(client.sessionId);
+    this.messageWindows.delete(client.sessionId);
+
+    if (hadPlayer && this.courseState) {
+      await this.cancelCourseToLobby();
+    }
+    if (this.state.hostPlayerId === client.sessionId) {
+      this.state.hostPlayerId = firstConnectedPlayerId(this.state.players);
+    }
+    for (const player of this.state.players.values()) player.ready = false;
+  }
+
+  async onDispose() {
+    if (!this.roomId || !this.reservationOwnerId) return;
+    await releaseRoomCode(this.presence, this.roomId, this.reservationOwnerId);
+  }
+
+  registerMessages() {
+    this.onMessage(MESSAGE.READY, (client, payload) => {
+      this.consumeMessage(client.sessionId, MESSAGE.READY);
+      if (!hasExactKeys(payload, ['ready']) || typeof payload.ready !== 'boolean') {
+        throw applicationError('Invalid ready message');
+      }
+      if (this.state.phase !== 'lobby') throw applicationError('Ready is only valid in the lobby');
+      const player = this.requirePlayer(client.sessionId);
+      player.ready = payload.ready;
+      return { ok: true };
+    });
+
+    this.onMessage(MESSAGE.SELECT_LEVEL, (client, payload) => {
+      this.consumeMessage(client.sessionId, MESSAGE.SELECT_LEVEL);
+      if (!hasExactKeys(payload, ['levelId']) || typeof payload.levelId !== 'string') {
+        throw applicationError('Invalid course selection message');
+      }
+      if (this.state.phase !== 'lobby') throw applicationError('Course selection is closed');
+      if (client.sessionId !== this.state.hostPlayerId) {
+        throw applicationError('Only the host can select a course');
+      }
+      if (!RELEASED_LEVEL_BY_ID.has(payload.levelId)) {
+        throw applicationError('Unknown released course');
+      }
+      if (!this.campaignUnlocks.get(client.sessionId)?.has(payload.levelId)) {
+        throw applicationError('That course is locked in the host campaign');
+      }
+      this.state.selectedLevelId = payload.levelId;
+      for (const player of this.state.players.values()) player.ready = false;
+      return { ok: true };
+    });
+
+    this.onMessage(MESSAGE.START, async (client, payload) => {
+      this.consumeMessage(client.sessionId, MESSAGE.START);
+      assertEmptyPayload(payload, 'start');
+      if (this.state.phase !== 'lobby') throw applicationError('Course already started');
+      if (client.sessionId !== this.state.hostPlayerId) {
+        throw applicationError('Only the host can start');
+      }
+      const players = [...this.state.players.values()];
+      if (players.length !== 2 || players.some((player) => !player.ready || !player.connected)) {
+        throw applicationError('Both players must be connected and ready');
+      }
+      await this.startCourse();
+      return { ok: true };
+    });
+
+    this.onMessage(MESSAGE.INPUT, (client, payload) => {
+      this.consumeMessage(client.sessionId, MESSAGE.INPUT, INPUT_RATE_LIMIT_PER_SECOND);
+      if (!isValidInput(payload)) throw applicationError('Invalid input message');
+      if (this.state.phase !== 'playing') throw applicationError('Input requires active play');
+      this.requirePlayer(client.sessionId);
+      this.latestInputs.set(client.sessionId, { ...payload });
+      return { ok: true };
+    });
+
+    this.onMessage(MESSAGE.PAUSE, (client, payload) => {
+      this.consumeMessage(client.sessionId, MESSAGE.PAUSE);
+      assertEmptyPayload(payload, 'pause');
+      this.requirePlayer(client.sessionId);
+      if (this.state.phase !== 'playing') throw applicationError('Pause requires active play');
+      this.state.phase = 'paused';
+      return { ok: true };
+    });
+
+    this.onMessage(MESSAGE.RESUME, (client, payload) => {
+      this.consumeMessage(client.sessionId, MESSAGE.RESUME);
+      assertEmptyPayload(payload, 'resume');
+      this.requirePlayer(client.sessionId);
+      if (this.state.phase !== 'paused' || !this.courseState) {
+        throw applicationError('Resume requires a paused course');
+      }
+      if ([...this.state.players.values()].some((player) => !player.connected)) {
+        throw applicationError('Every player must reconnect before resuming');
+      }
+      this.state.phase = 'playing';
+      this.courseState.phase = 'playing';
+      return { ok: true };
+    });
+
+    this.onMessage(MESSAGE.LEAVE, (client, payload) => {
+      this.consumeMessage(client.sessionId, MESSAGE.LEAVE);
+      assertEmptyPayload(payload, 'leave');
+      client.leave(CloseCode.CONSENTED);
+      return { ok: true };
+    });
+  }
+
+  async startCourse() {
+    const definition = RELEASED_LEVEL_BY_ID.get(this.state.selectedLevelId);
+    const level = buildReleasedLevel(definition);
+    const players = [...this.state.players.values()].map((player) => ({
+      playerId: player.playerId,
+      characterId: player.characterId,
+    }));
+    this.courseState = createCourseSimulation({
+      level,
+      seed: `room-${this.roomId}`,
+      players,
+    });
+    this.state.phase = 'playing';
+    applySimulationSnapshot(this.state, createCourseSnapshot(this.courseState));
+    await this.lock();
+  }
+
+  stepAuthoritativeSimulation(seconds) {
+    if (!this.courseState || this.state.phase !== 'playing') return;
+    stepCourseSimulation(this.courseState, Object.fromEntries(this.latestInputs), seconds);
+    applySimulationSnapshot(this.state, createCourseSnapshot(this.courseState));
+    this.state.phase = this.courseState.phase;
+    for (const [playerId, input] of this.latestInputs) {
+      if (input.jumpPressed) this.latestInputs.set(playerId, { ...input, jumpPressed: false });
+    }
+  }
+
+  async cancelCourseToLobby() {
+    this.courseState = null;
+    this.state.phase = 'lobby';
+    resetCourseState(this.state);
+    await this.unlock();
+  }
+
+  consumeMessage(sessionId, messageType, limit = ACTION_RATE_LIMIT_PER_SECOND) {
+    const now = Date.now();
+    const cutoff = now - 1000;
+    let byType = this.messageWindows.get(sessionId);
+    if (!byType) {
+      byType = new Map();
+      this.messageWindows.set(sessionId, byType);
+    }
+    const recent = (byType.get(messageType) ?? []).filter((time) => time > cutoff);
+    if (recent.length >= limit) throw applicationError('Message rate limit exceeded');
+    recent.push(now);
+    byType.set(messageType, recent);
+  }
+
+  requirePlayer(sessionId) {
+    const player = this.state.players.get(sessionId);
+    if (!player || !player.connected) throw applicationError('Player is not connected');
+    return player;
+  }
+}
+
+function validateJoinOptions(options) {
+  if (!options || typeof options !== 'object' || Array.isArray(options)) {
+    throw applicationError('Invalid join options');
+  }
+  const characterId = options.characterId;
+  if (!CHARACTER_IDS.has(characterId)) throw applicationError('Invalid character');
+  if (!Array.isArray(options.unlockedLevelIds)) {
+    throw applicationError('Invalid campaign unlocks');
+  }
+  const unlockedLevelIds = new Set();
+  for (const levelId of options.unlockedLevelIds) {
+    if (typeof levelId !== 'string' || !RELEASED_LEVEL_BY_ID.has(levelId)) {
+      throw applicationError('Invalid campaign unlocks');
+    }
+    unlockedLevelIds.add(levelId);
+  }
+  if (!unlockedLevelIds.has(DEFAULT_LEVEL_ID)) {
+    throw applicationError('The first course must be unlocked');
+  }
+  return { characterId, unlockedLevelIds };
+}
+
+function assertProtocol(version) {
+  if (version !== PROTOCOL_VERSION) {
+    throw applicationError(`Protocol version ${PROTOCOL_VERSION} is required`);
+  }
+}
+
+function assertEmptyPayload(payload, messageType) {
+  if (!hasExactKeys(payload, [])) throw applicationError(`Invalid ${messageType} message`);
+}
+
+function firstConnectedPlayerId(players) {
+  return [...players.values()]
+    .filter((player) => player.connected)
+    .map((player) => player.playerId)
+    .sort()[0] ?? '';
+}
+
+function applicationError(message) {
+  return new ServerError(ErrorCode.APPLICATION_ERROR, message);
+}
