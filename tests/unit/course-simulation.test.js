@@ -506,3 +506,45 @@ test('all four released courses simulate and serialize under Node', () => {
     assert.doesNotThrow(() => JSON.stringify(snapshot), definition.id);
   }
 });
+
+test('all released courses remain bit-for-bit deterministic across five simulated minutes', () => {
+  const fixedStep = 1 / 60;
+  const simulatedSteps = 18_000;
+
+  for (const definition of RELEASED_LEVELS) {
+    const level = buildReleasedLevel(definition);
+    // The production courses time out at four minutes. This headless soak keeps
+    // their authored geometry and rules while extending only the test clock.
+    level.time = 301;
+    const options = {
+      level,
+      seed: `five-minute-${definition.id}`,
+      players: [
+        { playerId: 'p1', characterId: 'fatsio' },
+        { playerId: 'p2', characterId: 'chefno' },
+      ],
+    };
+    const first = gameplay.createCourseSimulation(options);
+    const second = gameplay.createCourseSimulation(options);
+
+    // Keep the chefs at their authored spawn points so this soak tests 18,000
+    // real fixed simulation advances instead of ending at a combat timeout.
+    for (const state of [first, second]) {
+      for (const player of Object.values(state.players)) player.invulnerabilitySeconds = 301;
+    }
+
+    for (let tick = 0; tick < simulatedSteps; tick += 1) {
+      const inputs = { p1: {}, p2: {} };
+      gameplay.stepCourseSimulation(first, inputs, fixedStep);
+      gameplay.stepCourseSimulation(second, inputs, fixedStep);
+    }
+
+    assert.equal(first.tick, simulatedSteps, definition.id);
+    assert.equal(second.tick, simulatedSteps, definition.id);
+    assert.deepEqual(
+      gameplay.createCourseSnapshot(first),
+      gameplay.createCourseSnapshot(second),
+      `${definition.id} diverged after ${simulatedSteps} fixed steps`,
+    );
+  }
+});

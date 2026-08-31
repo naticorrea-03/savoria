@@ -115,3 +115,41 @@ test('remote interpolation rejects reordered and duplicate authoritative ticks',
   assert.equal(remote.sampleCount, 2);
   assert.deepEqual(remote.sample(150), position(10));
 });
+
+test('a 150 ms RTT network harness preserves immediate prediction through delay, reordering, and reconnect', () => {
+  const local = new LocalPrediction({
+    initial: position(0),
+    simulate: (current, controls, seconds) => position(current.x + controls.axis * seconds * 10),
+  });
+  const remote = new RemoteInterpolation();
+  const patchIntervalMs = 50;
+
+  // The local response happens at input time, before the first 20 Hz patch.
+  assert.deepEqual(local.applyInput(1, input(1), 0.1, 0), position(1));
+  assert.ok(0 < patchIntervalMs);
+  assert.deepEqual(local.applyInput(2, input(1), 0.1, 25), position(2));
+
+  // A delayed first acknowledgement arrives after one 150 ms round trip.
+  local.reconcile(position(1), 1, { now: 150 });
+  assert.equal(local.pendingCount, 1);
+  assert.ok(local.sample(150).x > 1);
+  assert.deepEqual(local.sample(215), position(2));
+
+  // A newer patch wins when an earlier snapshot is delayed and reordered.
+  assert.equal(remote.push(position(0), 10, 75), true);
+  assert.equal(remote.push(position(3), 12, 125), true);
+  assert.equal(remote.push(position(2), 11, 150), false);
+  assert.deepEqual(remote.sample(225), position(3));
+
+  // A dropped client discards prediction history, then starts cleanly on reconnect.
+  local.reset(position(3));
+  remote.reset(position(6), 13, 225);
+  assert.equal(local.pendingCount, 0);
+  assert.deepEqual(local.sample(225), position(3));
+  assert.deepEqual(remote.sample(225), position(6));
+
+  // The late second acknowledgement has no visible residual after 65 ms.
+  local.applyInput(3, input(-1), 0.1, 250);
+  local.reconcile(position(2), 3, { now: 400 });
+  assert.deepEqual(local.sample(465), position(2));
+});

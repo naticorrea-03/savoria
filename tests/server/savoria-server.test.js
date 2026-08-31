@@ -509,18 +509,52 @@ test('host promotion resets a selected course the survivor has not unlocked', as
   assert.equal(serverRoom.state.players.has(host.sessionId), false);
 });
 
-test('ten concurrently created rooms receive unique private invite codes', async () => {
-  const rooms = await Promise.all(
+test('ten simultaneous full rooms stay private, progress independently, and dispose cleanly', async () => {
+  const hosts = await Promise.all(
     Array.from({ length: 10 }, () => createClient()),
   );
-  const roomIds = rooms.map(({ roomId }) => roomId);
+  const roomIds = hosts.map(({ roomId }) => roomId);
+  const guests = await Promise.all(hosts.map((host, index) => joinClient(host.roomId, {
+    characterId: index % 2 === 0 ? 'chefno' : 'dinnerette',
+  })));
+  const serverRooms = roomIds.map((roomId) => testServer.getRoomById(roomId));
 
   assert.equal(new Set(roomIds).size, 10);
   assert.ok(roomIds.every((roomId) => /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/.test(roomId)));
-  await assert.rejects(
-    testServer.sdk.join(ROOM_NAME, joinOptions()),
-    /no rooms|not found|matchmake/i,
+  assert.ok(serverRooms.every((room) => room.state.players.size === 2));
+  await Promise.all(hosts.map((host) => assert.rejects(
+    joinClient(host.roomId, { characterId: 'fatsio' }),
+    /full|locked|seat|matchmake/i,
+  )));
+
+  await Promise.all(hosts.map((host, index) => host.request(MESSAGE.SELECT_LEVEL, {
+    levelId: ALL_LEVEL_IDS[index % ALL_LEVEL_IDS.length],
+  })));
+  await Promise.all([...hosts, ...guests].map((client) => client.request(MESSAGE.READY, { ready: true })));
+  await Promise.all(hosts.map((host) => host.request(MESSAGE.START, {})));
+
+  assert.deepEqual(
+    serverRooms.map((room) => room.state.selectedLevelId),
+    hosts.map((_, index) => ALL_LEVEL_IDS[index % ALL_LEVEL_IDS.length]),
   );
+  assert.ok(serverRooms.every((room) => room.state.phase === 'playing' && room.courseState));
+  assert.equal(new Set(serverRooms.map((room) => room.courseState)).size, 10);
+  await hosts[0].request(MESSAGE.INPUT, {
+    axis: 1,
+    running: false,
+    jumpPressed: false,
+    jumpHeld: false,
+  });
+  await serverRooms[0].waitForNextTimestep();
+  assert.equal(serverRooms[0].state.players.get(hosts[0].sessionId).acceptedInputCount, 1);
+  assert.ok(serverRooms.slice(1).every((room, index) => (
+    room.state.players.get(hosts[index + 1].sessionId).acceptedInputCount === 0
+  )));
+
+  await Promise.all(guests.map((guest) => guest.leave()));
+  await Promise.all(serverRooms.map((room) => waitUntil(() => room.state.players.size === 1)));
+  await Promise.all(hosts.map((host) => host.leave()));
+  await Promise.all(roomIds.map((roomId) => waitUntil(() => testServer.getRoomById(roomId) === undefined)));
 });
 
 async function createStartedRoom() {

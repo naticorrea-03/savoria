@@ -386,6 +386,79 @@ test('an expired invite returns to room recovery controls', async ({ page }) => 
   await expect(page.getByLabel('Private room code')).toHaveValue('ABC234');
 });
 
+test('two browser contexts enter every released course through the production lobby', async ({ browser }) => {
+  const hostContext = await browser.newContext();
+  const guestContext = await browser.newContext();
+  const host = await hostContext.newPage();
+  const guest = await guestContext.newPage();
+  const consoleErrors = [];
+  for (const [label, page] of [['host', host], ['guest', guest]]) {
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(`${label}: ${message.text()}`);
+    });
+    page.on('pageerror', (error) => consoleErrors.push(`${label}: ${error.message}`));
+  }
+  await host.addInitScript(() => {
+    localStorage.setItem('savoria3d-save-v4', JSON.stringify({
+      version: 4,
+      unlocked: 4,
+      best: { '1-1': 3, '1-2': 3, '2-1': 3 },
+      chef: 'fatsio',
+      sound: false,
+    }));
+  });
+
+  try {
+    for (const levelId of ['1-1', '1-2', '2-1', '2-2']) {
+      await host.goto(`${ONLINE_ORIGIN}/play/`);
+      await host.getByRole('button', { name: 'Online Co-op' }).click();
+      await host.getByRole('button', { name: 'Create room' }).click();
+      await expect(host.locator('#app')).toHaveAttribute('data-screen', 'lobby');
+      const roomCode = await host.locator('#lobby-room-code').textContent();
+
+      await guest.goto(`${ONLINE_ORIGIN}/play/?room=${roomCode}`);
+      await guest.getByRole('button', { name: 'Join room' }).click();
+      await expect(guest.locator('#app')).toHaveAttribute('data-screen', 'lobby');
+      await host.getByLabel('Course', { exact: true }).selectOption(levelId);
+      await expect(guest.getByLabel('Course', { exact: true })).toHaveValue(levelId);
+      await host.getByRole('button', { name: 'Ready up' }).click();
+      await guest.getByRole('button', { name: 'Ready up' }).click();
+      await expect(host.getByRole('button', { name: 'Start course' })).toBeEnabled();
+      await host.getByRole('button', { name: 'Start course' }).click();
+
+      for (const page of [host, guest]) {
+        await expect(page.locator('#app')).toHaveAttribute('data-screen', 'online-course');
+        await expect(page.locator('#multiplayer-course-title')).toContainText(levelId);
+        await expect(page.locator('canvas[data-multiplayer-course]')).toBeVisible();
+        await expect(page.locator('#multiplayer-course-stage')).toBeFocused();
+        expect(await page.evaluate(() => (
+          window.__savoriaTest.multiplayer.view.selectedLevelId
+        ))).toBe(levelId);
+      }
+
+      const playerIds = await host.evaluate(() => (
+        window.__savoriaTest.multiplayer.view.players.map(({ sessionId }) => sessionId)
+      ));
+      await host.evaluate((playerId) => {
+        window.__savoriaTest.multiplayer.control({ action: 'goal', playerId });
+      }, playerIds[0]);
+      await host.evaluate((playerId) => {
+        window.__savoriaTest.multiplayer.control({ action: 'goal', playerId });
+      }, playerIds[1]);
+      for (const page of [host, guest]) {
+        await expect(page.locator('#complete-overlay')).toBeVisible();
+        await expect.poll(() => page.evaluate(() => (
+          window.__savoriaTest.multiplayer.completionCount
+        ))).toBe(1);
+      }
+    }
+    expect(consoleErrors).toEqual([]);
+  } finally {
+    await hostContext.close();
+    await guestContext.close();
+  }
+});
+
 test('guest Escape leaves without pausing, then either chef can fail the recovered team', async ({ browser }) => {
   const hostContext = await browser.newContext();
   const guestContext = await browser.newContext();
