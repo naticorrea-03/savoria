@@ -10,6 +10,7 @@ import {
   ROOM_NAME,
 } from '../../js/multiplayer/protocol.js';
 import {
+  RECONNECT_HANDSHAKE_SECONDS,
   RECONNECTION_WINDOW_SECONDS,
   SavoriaRoom,
 } from '../../server/savoria-room.js';
@@ -17,10 +18,12 @@ import { createGameServer } from '../../server/app.js';
 
 const ALL_LEVEL_IDS = RELEASED_LEVELS.map(({ id }) => id);
 const TEST_RECONNECTION_SECONDS = 0.5;
+const TEST_RECONNECT_HANDSHAKE_SECONDS = 0.1;
 let testServer;
 
 before(async () => {
   SavoriaRoom.reconnectionWindowSeconds = TEST_RECONNECTION_SECONDS;
+  SavoriaRoom.reconnectHandshakeSeconds = TEST_RECONNECT_HANDSHAKE_SECONDS;
   testServer = await boot(createGameServer(), 2568);
 });
 
@@ -30,6 +33,7 @@ afterEach(async () => {
 
 after(async () => {
   SavoriaRoom.reconnectionWindowSeconds = RECONNECTION_WINDOW_SECONDS;
+  SavoriaRoom.reconnectHandshakeSeconds = RECONNECT_HANDSHAKE_SECONDS;
   await testServer.shutdown();
 });
 
@@ -96,21 +100,46 @@ test('create, join, and invalid room codes enforce protocol version 1', async ()
   );
 });
 
-test('an SDK reconnect stays inactive until a compatible protocol handshake', async () => {
-  const host = await createClient();
-  const serverRoom = testServer.getRoomById(host.roomId);
+test('a mismatched reconnect handshake closes the transport and runs disconnect cleanup', async () => {
+  const { host, guest, serverRoom } = await createStartedRoom();
   const token = host.reconnectionToken;
+  const playerId = host.sessionId;
 
   await dropClient(host);
   const reconnected = await testServer.sdk.reconnect(token);
   await reconnected.waitForInitialState();
+  const transportClosed = waitForRoomLeave(reconnected);
 
-  assert.equal(serverRoom.state.players.get(host.sessionId).connected, false);
+  assert.equal(serverRoom.state.players.get(playerId).connected, false);
   await assert.rejects(
     reconnected.request(MESSAGE.RECONNECT, { protocolVersion: 2 }),
-    /protocol/i,
+    /closed|connection/i,
   );
-  assert.equal(serverRoom.state.players.get(host.sessionId).connected, false);
+  const [closeCode, closeReason] = await transportClosed;
+  await waitUntil(() => serverRoom.state.players.has(playerId) === false);
+
+  assert.equal(closeCode, CloseCode.CONSENTED);
+  assert.match(closeReason, /protocol version 1/i);
+  assertReconnectCleanup(serverRoom, playerId, guest.sessionId);
+});
+
+test('a missing reconnect handshake expires and runs disconnect cleanup', async () => {
+  const { host, guest, serverRoom } = await createStartedRoom();
+  const token = host.reconnectionToken;
+  const playerId = host.sessionId;
+
+  await dropClient(host);
+  const reconnected = await testServer.sdk.reconnect(token);
+  await reconnected.waitForInitialState();
+  const transportClosed = waitForRoomLeave(reconnected);
+
+  assert.equal(serverRoom.state.players.get(playerId).connected, false);
+  const [closeCode, closeReason] = await transportClosed;
+  await waitUntil(() => serverRoom.state.players.has(playerId) === false);
+
+  assert.equal(closeCode, CloseCode.CONSENTED);
+  assert.match(closeReason, /handshake expired/i);
+  assertReconnectCleanup(serverRoom, playerId, guest.sessionId);
 });
 
 test('ready, course selection, and start enforce payloads, host authority, and unlocks', async () => {
@@ -247,6 +276,11 @@ test('disconnect pauses immediately and reconnect restores the same player state
   assert.equal(serverRoom.state.phase, 'paused');
   await guest.request(MESSAGE.RESUME, {});
   assert.equal(serverRoom.state.phase, 'playing');
+  await new Promise((resolve) => {
+    setTimeout(resolve, TEST_RECONNECT_HANDSHAKE_SECONDS * 1000 + 25);
+  });
+  assert.equal(reconnected.connection.isOpen, true);
+  assert.equal(serverRoom.state.players.get(playerId).connected, true);
 });
 
 test('reconnection expiry cancels play, returns the survivor to lobby, and promotes them', async () => {
@@ -344,6 +378,22 @@ async function dropClient(room) {
   const dropped = new Promise((resolve) => room.onDrop.once(resolve));
   room.connection.close(CloseCode.MAY_TRY_RECONNECT);
   await dropped;
+}
+
+function assertReconnectCleanup(serverRoom, departedPlayerId, survivorPlayerId) {
+  assert.equal(serverRoom.state.players.has(departedPlayerId), false);
+  assert.equal(serverRoom.state.players.has(survivorPlayerId), true);
+  assert.equal(serverRoom.state.hostPlayerId, survivorPlayerId);
+  assert.equal(serverRoom.state.players.get(survivorPlayerId).ready, false);
+  assert.equal(serverRoom.state.phase, 'lobby');
+  assert.equal(serverRoom.courseState, null);
+  assert.equal(serverRoom.state.timer, 0);
+}
+
+function waitForRoomLeave(room) {
+  return new Promise((resolve) => {
+    room.onLeave.once((code, reason) => resolve([code, reason]));
+  });
 }
 
 async function waitUntil(predicate, timeoutMs = 1000) {

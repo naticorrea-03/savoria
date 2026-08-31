@@ -28,6 +28,7 @@ import {
 } from './state.js';
 
 export const RECONNECTION_WINDOW_SECONDS = 60;
+export const RECONNECT_HANDSHAKE_SECONDS = 5;
 export const SIMULATION_HZ = 60;
 export const PATCH_HZ = 20;
 
@@ -43,11 +44,12 @@ const NEUTRAL_INPUT = Object.freeze({
 
 export class SavoriaRoom extends Room {
   static reconnectionWindowSeconds = RECONNECTION_WINDOW_SECONDS;
+  static reconnectHandshakeSeconds = RECONNECT_HANDSHAKE_SECONDS;
 
   courseState = null;
   latestInputs = new Map();
   campaignUnlocks = new Map();
-  pendingReconnects = new Set();
+  pendingReconnects = new Map();
   messageWindows = new Map();
   reservationOwnerId = '';
 
@@ -95,6 +97,7 @@ export class SavoriaRoom extends Room {
   }
 
   onDrop(client) {
+    this.clearPendingReconnect(client.sessionId);
     const player = this.state.players.get(client.sessionId);
     if (player) player.connected = false;
     this.latestInputs.set(client.sessionId, { ...NEUTRAL_INPUT });
@@ -107,15 +110,20 @@ export class SavoriaRoom extends Room {
   onReconnect(client) {
     const player = this.state.players.get(client.sessionId);
     if (!player) throw applicationError('Player is no longer part of this room');
-    this.pendingReconnects.add(client.sessionId);
+    this.clearPendingReconnect(client.sessionId);
+    const deadline = this.clock.setTimeout(
+      () => this.closePendingReconnect(client.sessionId),
+      this.constructor.reconnectHandshakeSeconds * 1000,
+    );
+    this.pendingReconnects.set(client.sessionId, { client, deadline });
     this.latestInputs.set(client.sessionId, { ...NEUTRAL_INPUT });
   }
 
   async onLeave(client) {
     const hadPlayer = this.state.players.has(client.sessionId);
+    this.clearPendingReconnect(client.sessionId);
     this.state.players.delete(client.sessionId);
     this.campaignUnlocks.delete(client.sessionId);
-    this.pendingReconnects.delete(client.sessionId);
     this.latestInputs.delete(client.sessionId);
     this.messageWindows.delete(client.sessionId);
 
@@ -222,17 +230,24 @@ export class SavoriaRoom extends Room {
 
     this.onMessage(MESSAGE.RECONNECT, (client, payload) => {
       this.consumeMessage(client.sessionId, 'action', ACTION_RATE_LIMIT_PER_SECOND);
-      if (!hasExactKeys(payload, ['protocolVersion'])) {
-        throw applicationError('Invalid reconnect message');
-      }
-      assertProtocol(payload.protocolVersion);
       if (!this.pendingReconnects.has(client.sessionId)) {
         throw applicationError('Reconnect handshake is not pending');
+      }
+      if (!hasExactKeys(payload, ['protocolVersion'])) {
+        this.closePendingReconnect(client.sessionId, 'Invalid reconnect message');
+        return;
+      }
+      if (payload.protocolVersion !== PROTOCOL_VERSION) {
+        this.closePendingReconnect(
+          client.sessionId,
+          `Protocol version ${PROTOCOL_VERSION} is required`,
+        );
+        return;
       }
       const player = this.state.players.get(client.sessionId);
       if (!player) throw applicationError('Player is no longer part of this room');
       player.connected = true;
-      this.pendingReconnects.delete(client.sessionId);
+      this.clearPendingReconnect(client.sessionId);
       this.latestInputs.set(client.sessionId, { ...NEUTRAL_INPUT });
       return { ok: true };
     });
@@ -284,6 +299,20 @@ export class SavoriaRoom extends Room {
     if (!hostUnlocks || hostUnlocks.has(this.state.selectedLevelId)) return;
     this.state.selectedLevelId = RELEASED_LEVELS.find(({ id }) => hostUnlocks.has(id))?.id
       ?? DEFAULT_LEVEL_ID;
+  }
+
+  clearPendingReconnect(sessionId) {
+    const pending = this.pendingReconnects.get(sessionId);
+    if (!pending) return;
+    pending.deadline.clear();
+    this.pendingReconnects.delete(sessionId);
+  }
+
+  closePendingReconnect(sessionId, reason = 'Reconnect handshake expired') {
+    const pending = this.pendingReconnects.get(sessionId);
+    if (!pending) return;
+    this.clearPendingReconnect(sessionId);
+    pending.client.leave(CloseCode.CONSENTED, reason);
   }
 
   consumeMessage(sessionId, bucket, limit) {
