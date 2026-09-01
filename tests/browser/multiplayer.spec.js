@@ -264,6 +264,10 @@ test('two clients share an invite lobby with independent names and duplicate che
     await expect.poll(() => host.evaluate((guestId) => (
       window.__savoriaTest.multiplayer.view.players.find(({ sessionId }) => sessionId === guestId).power?.type
     ), ids.guestId)).toBe('speed');
+    await expect.poll(() => guest.evaluate(() => {
+      const local = window.__savoriaTest.multiplayer.view.players.find(({ isLocal }) => isLocal);
+      return local.power?.type;
+    })).toBe('speed');
     const beforeReconnect = await guest.evaluate(() => {
       const view = window.__savoriaTest.multiplayer.view;
       const local = view.players.find(({ isLocal }) => isLocal);
@@ -276,6 +280,7 @@ test('two clients share an invite lobby with independent names and duplicate che
         reachedGoal: local.reachedGoal,
       };
     });
+    expect(beforeReconnect.powerType).toBe('speed');
     await guest.evaluate(() => window.__savoriaTest.multiplayer.drop());
     await expect.poll(() => host.evaluate(() => (
       window.__savoriaTest.multiplayer.view.phase
