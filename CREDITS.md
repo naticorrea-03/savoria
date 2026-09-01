@@ -21,11 +21,14 @@ The package lock records exact dependency artifacts. These direct dependencies s
 
 | Package | Version | Upstream | License |
 | --- | --- | --- | --- |
-| `colyseus` | `0.18.5` | [Colyseus](https://github.com/colyseus/colyseus) | MIT |
+| `@colyseus/core` | `0.18.10` | [Colyseus](https://github.com/colyseus/colyseus) | MIT |
+| `@colyseus/ws-transport` | `0.18.2` | [Colyseus](https://github.com/colyseus/colyseus) | MIT |
 | `@colyseus/sdk` | `0.18.2` | [Colyseus](https://github.com/colyseus/colyseus) | MIT |
 | `@colyseus/schema` | `5.0.25` | [Colyseus Schema](https://github.com/colyseus/schema) | MIT |
 | `@colyseus/testing` | `0.18.5` | [Colyseus](https://github.com/colyseus/colyseus) | MIT |
+| `@colyseus/tools` | `0.18.3` | [Colyseus](https://github.com/colyseus/colyseus) | MIT |
 | `@colyseus/loadtest` | `0.18.2` | [Colyseus](https://github.com/colyseus/colyseus) | MIT |
+| `express` | `5.2.1` | [Express](https://github.com/expressjs/express) | MIT |
 | `@playwright/test` | `1.62.1` | [Playwright](https://github.com/microsoft/playwright) | Apache-2.0 |
 
 `vendor/colyseus.js` is the browser SDK bundle. Its upstream license is retained at [`vendor/COLYSEUS-SDK-LICENSE.txt`](./vendor/COLYSEUS-SDK-LICENSE.txt). Keep that file when updating or redistributing the bundle. Package licenses for installed dependencies remain in their respective package distributions.

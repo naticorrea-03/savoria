@@ -1,7 +1,7 @@
 import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Server } from 'colyseus';
+import { Server } from '@colyseus/core';
 import { ROOM_NAME } from '../js/multiplayer/protocol.js';
 import { SavoriaRoom } from './savoria-room.js';
 
