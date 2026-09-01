@@ -197,15 +197,6 @@ test('two clients share an invite lobby with independent names and duplicate che
         window.__savoriaTest.multiplayer.view.players.find(({ sessionId }) => sessionId === hostId).hearts
       ), ids.hostId)).toBe(3);
     }
-    await host.evaluate(({ guestId, speedId }) => {
-      window.__savoriaTest.multiplayer.control({
-        action: 'collectible', playerId: guestId, targetId: speedId,
-      });
-    }, ids);
-    await expect.poll(() => host.evaluate((guestId) => (
-      window.__savoriaTest.multiplayer.view.players.find(({ sessionId }) => sessionId === guestId).power?.type
-    ), ids.guestId)).toBe('speed');
-
     await host.evaluate(({ hostId }) => {
       window.__savoriaTest.multiplayer.control({ action: 'checkpoint', playerId: hostId });
     }, ids);
@@ -265,6 +256,18 @@ test('two clients share an invite lobby with independent names and duplicate che
     await expect.poll(() => host.evaluate(() => (
       window.__savoriaTest.multiplayer.pendingInputCount
     ))).toBeGreaterThan(0);
+    await host.evaluate(({ guestId, speedId }) => {
+      window.__savoriaTest.multiplayer.control({
+        action: 'collectible', playerId: guestId, targetId: speedId,
+      });
+    }, ids);
+    await expect.poll(() => host.evaluate((guestId) => (
+      window.__savoriaTest.multiplayer.view.players.find(({ sessionId }) => sessionId === guestId).power?.type
+    ), ids.guestId)).toBe('speed');
+    await expect.poll(() => guest.evaluate(() => {
+      const local = window.__savoriaTest.multiplayer.view.players.find(({ isLocal }) => isLocal);
+      return local.power?.type;
+    })).toBe('speed');
     const beforeReconnect = await guest.evaluate(() => {
       const view = window.__savoriaTest.multiplayer.view;
       const local = view.players.find(({ isLocal }) => isLocal);
@@ -277,6 +280,7 @@ test('two clients share an invite lobby with independent names and duplicate che
         reachedGoal: local.reachedGoal,
       };
     });
+    expect(beforeReconnect.powerType).toBe('speed');
     await guest.evaluate(() => window.__savoriaTest.multiplayer.drop());
     await expect.poll(() => host.evaluate(() => (
       window.__savoriaTest.multiplayer.view.phase
