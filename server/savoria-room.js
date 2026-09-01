@@ -3,7 +3,7 @@ import {
   ErrorCode,
   Room,
   ServerError,
-} from 'colyseus';
+} from '@colyseus/core';
 import {
   createCourseSimulation,
   createCourseSnapshot,

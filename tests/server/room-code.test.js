@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LocalPresence } from 'colyseus';
+import { LocalPresence } from '@colyseus/core';
 import {
   ROOM_CODE_ALPHABET,
   ROOM_CODE_LENGTH,

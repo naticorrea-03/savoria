@@ -16,11 +16,14 @@
   "devDependencies": {
     "@colyseus/loadtest": "0.18.2",
     "@colyseus/testing": "0.18.5",
+    "@colyseus/tools": "0.18.3",
     "@playwright/test": "1.62.1"
   },
   "dependencies": {
+    "@colyseus/core": "0.18.10",
     "@colyseus/schema": "5.0.25",
     "@colyseus/sdk": "0.18.2",
-    "colyseus": "0.18.5"
+    "@colyseus/ws-transport": "0.18.2",
+    "express": "5.2.1"
   }
 }
