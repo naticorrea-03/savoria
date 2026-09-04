@@ -121,7 +121,11 @@ test('real keyboard play can board and stand on the first floating pasta platfor
       window.__savoriaTest.multiplayer.view.players.find(({ isLocal }) => isLocal).position.x
     ));
     await game.host.keyboard.down('ArrowRight');
-    await game.host.waitForTimeout(180);
+    await expect.poll(() => game.host.evaluate(() => {
+      const local = window.__savoriaTest.multiplayer.view.players
+        .find(({ isLocal }) => isLocal);
+      return local.groundMoverId === 'mover-0' ? local.position.x : startX;
+    })).toBeGreaterThan(startX + 0.15);
     await game.host.keyboard.up('ArrowRight');
 
     await expect.poll(() => game.host.evaluate(() => (

@@ -333,7 +333,7 @@ export class SavoriaRoom extends Room {
         .find(({ id }) => id === payload.targetId);
       if (!platform) throw applicationError('Unknown browser moving platform');
       snapPlayer(player, [
-        platform.positionX,
+        platform.aabb.minX + player.width / 2 + 0.1,
         platform.aabb.maxY,
         platform.positionZ,
       ]);
