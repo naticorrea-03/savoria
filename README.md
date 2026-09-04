@@ -2,6 +2,8 @@
 
 Savoria is a desktop food platformer. Choose a chef, cross Pasta Plains and Sushi Shores, collect tomatoes, and clear four hand-built courses. Solo play is build-free. Online Co-op adds private two-player rooms with a server-authoritative simulation.
 
+Play the hosted game at [savoria-online-coop.onrender.com](https://savoria-online-coop.onrender.com/).
+
 ## Play locally
 
 Install Node 22 dependencies for combined solo and online play:
@@ -93,7 +95,7 @@ docker run --rm -p 2567:2567 savoria
 
 Then open <http://127.0.0.1:2567/> and verify <http://127.0.0.1:2567/health>. On another Node-capable host, build this Dockerfile, route its public port to the container port, and let the host set `PORT`. No secrets or database are required.
 
-[`render.yaml`](./render.yaml) is a free Render Blueprint template. Creating a Render service is intentionally outside this repository task. Free Render services can sleep after inactivity, quotas and plan terms can change, and any deploy or restart erases active in-memory rooms. Reconnect tokens cannot survive a restart. Completed local progress remains in each player's browser.
+[`render.yaml`](./render.yaml) manages the free reference deployment at [savoria-online-coop.onrender.com](https://savoria-online-coop.onrender.com/). Free Render services can sleep after inactivity, quotas and plan terms can change, and any deploy or restart erases active in-memory rooms. Reconnect tokens cannot survive a restart. Completed local progress remains in each player's browser.
 
 ## Contribute
 
@@ -108,7 +110,7 @@ Released game content includes two complete worlds:
 
 Worlds 3 through 6 live in `js/experimental/`. They are hidden experimental data. They are not part of the released game, public map, or progression.
 
-This repository includes self-hosting templates. It does not claim a hosted build, Render service, public repository, remote CI run, or Pages deployment.
+The public repository includes the hosted Render Blueprint and provider-neutral Docker setup.
 
 ## Licensing
 
