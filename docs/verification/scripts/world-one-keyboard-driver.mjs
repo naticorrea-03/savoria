@@ -5,7 +5,7 @@ import { chromium } from '@playwright/test';
 
 const ORIGIN = process.env.SAVORIA_ORIGIN ?? 'http://127.0.0.1:8977';
 const OUTPUT = resolve(process.argv[2] ?? 'docs/verification/results/2026-08-26-keyboard-playthroughs.json');
-const CHEFS = ['Fatsio', 'Dinnerette', 'Chefno'];
+const CHEFS = ['Hungrio', 'Dinnerette', 'Chefno'];
 const COURSES = ['1-1', '1-2'];
 const MAX_ATTEMPTS = 3;
 const ATTEMPT_TIMEOUT_MS = 60_000;

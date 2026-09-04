@@ -4,7 +4,7 @@ import { createFreshSave, recordCompletion } from './save-store.js';
 export const CHARACTERS = [
   {
     id: 'fatsio',
-    name: 'Fatsio',
+    name: 'Hungrio',
     desc: 'Big heart, bigger appetite.',
     img: 'assets/sprites/fatsio.png',
   },

@@ -50,7 +50,7 @@ The released flow is:
 
 1. Launch the game from the landing page.
 2. Start or continue a saved game.
-3. Choose Fatsio, Dinnerette, or Chefno.
+3. Choose Hungrio, Dinnerette, or Chefno.
 4. Enter the Pasta Plains map.
 5. Play Farfalle Fields.
 6. Unlock and play Penne Ridge.

@@ -22,6 +22,10 @@ test('character selection uses static portrait artwork', () => {
   );
 });
 
+test('the original fatsio save ID is presented as Hungrio', () => {
+  assert.equal(CHARACTERS.find(({ id }) => id === 'fatsio')?.name, 'Hungrio');
+});
+
 test('title hub reports real save progress and the next playable course', () => {
   assert.deepEqual(titleProgressFor({
     version: 4,

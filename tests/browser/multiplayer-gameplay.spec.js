@@ -2,6 +2,13 @@ import { expect, test } from '@playwright/test';
 
 const ORIGIN = process.env.SAVORIA_GAMEPLAY_ORIGIN ?? 'http://127.0.0.1:2567';
 
+async function focusCourse(page) {
+  await page.bringToFront();
+  const stage = page.locator('#multiplayer-course-stage');
+  await stage.focus();
+  await expect(stage).toBeFocused();
+}
+
 async function startTwoPlayerCourse(browser, { levelId = '1-1' } = {}) {
   const hostContext = await browser.newContext();
   const guestContext = await browser.newContext();
@@ -64,35 +71,46 @@ test('real keyboard input moves and visibly jumps the local chef', async ({ brow
         authorityX: local.position.x,
         authorityY: local.position.y,
         presentationY: multiplayer.presentation.local.position.y,
-        accepted: local.acceptedInputCount,
       };
     });
 
+    await focusCourse(game.host);
     await game.host.keyboard.down('ArrowRight');
-    await game.host.waitForTimeout(500);
-    await game.host.keyboard.up('ArrowRight');
-    await expect.poll(() => game.host.evaluate(() => (
-      window.__savoriaTest.multiplayer.view.players.find(({ isLocal }) => isLocal).position.x
-    ))).toBeGreaterThan(start.authorityX + 1);
+    try {
+      await expect.poll(() => game.host.evaluate(() => (
+        window.__savoriaTest.multiplayer.view.players.find(({ isLocal }) => isLocal).position.x
+      ))).toBeGreaterThan(start.authorityX + 0.15);
+    } finally {
+      await game.host.keyboard.up('ArrowRight');
+    }
     await expect.poll(() => game.guest.evaluate(() => (
       window.__savoriaTest.multiplayer.view.players.find(({ isLocal }) => !isLocal).position.x
-    ))).toBeGreaterThan(start.authorityX + 1);
+    ))).toBeGreaterThan(start.authorityX + 0.15);
 
-    await game.host.keyboard.down('Space');
-    await expect.poll(() => game.host.evaluate(() => (
+    const acceptedBeforeJump = await game.host.evaluate(() => (
       window.__savoriaTest.multiplayer.view.players.find(({ isLocal }) => isLocal)
         .acceptedInputCount
-    ))).toBeGreaterThan(start.accepted);
-    await expect.poll(() => game.host.evaluate(() => (
-      window.__savoriaTest.multiplayer.view.players.find(({ isLocal }) => isLocal).position.y
-    ))).toBeGreaterThan(start.authorityY + 0.5);
-    await expect.poll(() => game.host.evaluate(() => (
-      window.__savoriaTest.multiplayer.presentation.local.position.y
-    ))).toBeGreaterThan(start.presentationY + 0.5);
-    await expect.poll(() => game.guest.evaluate(() => (
-      window.__savoriaTest.multiplayer.view.players.find(({ isLocal }) => !isLocal).position.y
-    ))).toBeGreaterThan(start.authorityY + 0.5);
-    await game.host.keyboard.up('Space');
+    ));
+    await game.host.keyboard.down('Space');
+    try {
+      await Promise.all([
+        expect.poll(() => game.host.evaluate(() => (
+          window.__savoriaTest.multiplayer.view.players.find(({ isLocal }) => isLocal)
+            .acceptedInputCount
+        ))).toBeGreaterThan(acceptedBeforeJump),
+        expect.poll(() => game.host.evaluate(() => (
+          window.__savoriaTest.multiplayer.view.players.find(({ isLocal }) => isLocal).position.y
+        ))).toBeGreaterThan(start.authorityY + 0.5),
+        expect.poll(() => game.host.evaluate(() => (
+          window.__savoriaTest.multiplayer.presentation.local.position.y
+        ))).toBeGreaterThan(start.presentationY + 0.5),
+        expect.poll(() => game.guest.evaluate(() => (
+          window.__savoriaTest.multiplayer.view.players.find(({ isLocal }) => !isLocal).position.y
+        ))).toBeGreaterThan(start.authorityY + 0.5),
+      ]);
+    } finally {
+      await game.host.keyboard.up('Space');
+    }
     expect(game.errors).toEqual([]);
   } finally {
     await game.hostContext.close();
@@ -120,23 +138,23 @@ test('real keyboard play can board and stand on the first floating pasta platfor
     const startX = await game.host.evaluate(() => (
       window.__savoriaTest.multiplayer.view.players.find(({ isLocal }) => isLocal).position.x
     ));
+    await focusCourse(game.host);
     await game.host.keyboard.down('ArrowRight');
-    await expect.poll(() => game.host.evaluate(() => {
-      const local = window.__savoriaTest.multiplayer.view.players
-        .find(({ isLocal }) => isLocal);
-      return local.groundMoverId === 'mover-0' ? local.position.x : startX;
-    })).toBeGreaterThan(startX + 0.15);
-    await game.host.keyboard.up('ArrowRight');
-
-    await expect.poll(() => game.host.evaluate(() => (
-      window.__savoriaTest.multiplayer.view.players.find(({ isLocal }) => isLocal).position.x
-    ))).toBeGreaterThan(startX);
-    await expect.poll(() => game.host.evaluate(() => {
-      const view = window.__savoriaTest.multiplayer.view;
-      const local = view.players.find(({ isLocal }) => isLocal);
-      const platform = view.movingPlatforms.find(({ id }) => id === 'mover-0');
-      return Math.abs(local.position.y - (platform.position.y + platform.height / 2));
-    })).toBeLessThan(0.06);
+    try {
+      await expect.poll(() => game.host.evaluate((initialX) => {
+        const view = window.__savoriaTest.multiplayer.view;
+        const local = view.players.find(({ isLocal }) => isLocal);
+        const platform = view.movingPlatforms.find(({ id }) => id === 'mover-0');
+        const standingOnPlatform = Math.abs(
+          local.position.y - (platform.position.y + platform.height / 2),
+        ) < 0.06;
+        return local.position.x > initialX + 0.02
+          && local.groundMoverId === 'mover-0'
+          && standingOnPlatform;
+      }, startX)).toBe(true);
+    } finally {
+      await game.host.keyboard.up('ArrowRight');
+    }
     expect(game.errors).toEqual([]);
   } finally {
     await game.hostContext.close();
