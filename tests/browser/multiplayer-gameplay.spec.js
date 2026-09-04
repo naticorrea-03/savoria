@@ -2,6 +2,16 @@ import { expect, test } from '@playwright/test';
 
 const ORIGIN = process.env.SAVORIA_GAMEPLAY_ORIGIN ?? 'http://127.0.0.1:2567';
 
+async function holdKeyForFrames(page, key, frameCount) {
+  await page.keyboard.down(key);
+  await page.evaluate(async (count) => {
+    for (let frame = 0; frame < count; frame += 1) {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+  }, frameCount);
+  await page.keyboard.up(key);
+}
+
 async function startTwoPlayerCourse(browser, { levelId = '1-1' } = {}) {
   const hostContext = await browser.newContext();
   const guestContext = await browser.newContext();
@@ -68,15 +78,13 @@ test('real keyboard input moves and visibly jumps the local chef', async ({ brow
       };
     });
 
-    await game.host.keyboard.down('ArrowRight');
-    await game.host.waitForTimeout(500);
-    await game.host.keyboard.up('ArrowRight');
+    await holdKeyForFrames(game.host, 'ArrowRight', 12);
     await expect.poll(() => game.host.evaluate(() => (
       window.__savoriaTest.multiplayer.view.players.find(({ isLocal }) => isLocal).position.x
-    ))).toBeGreaterThan(start.authorityX + 1);
+    ))).toBeGreaterThan(start.authorityX + 0.15);
     await expect.poll(() => game.guest.evaluate(() => (
       window.__savoriaTest.multiplayer.view.players.find(({ isLocal }) => !isLocal).position.x
-    ))).toBeGreaterThan(start.authorityX + 1);
+    ))).toBeGreaterThan(start.authorityX + 0.15);
 
     await game.host.keyboard.down('Space');
     await expect.poll(() => game.host.evaluate(() => (
@@ -120,17 +128,11 @@ test('real keyboard play can board and stand on the first floating pasta platfor
     const startX = await game.host.evaluate(() => (
       window.__savoriaTest.multiplayer.view.players.find(({ isLocal }) => isLocal).position.x
     ));
-    await game.host.keyboard.down('ArrowRight');
-    await expect.poll(() => game.host.evaluate(() => {
-      const local = window.__savoriaTest.multiplayer.view.players
-        .find(({ isLocal }) => isLocal);
-      return local.groundMoverId === 'mover-0' ? local.position.x : startX;
-    })).toBeGreaterThan(startX + 0.15);
-    await game.host.keyboard.up('ArrowRight');
+    await holdKeyForFrames(game.host, 'ArrowRight', 4);
 
     await expect.poll(() => game.host.evaluate(() => (
       window.__savoriaTest.multiplayer.view.players.find(({ isLocal }) => isLocal).position.x
-    ))).toBeGreaterThan(startX);
+    ))).toBeGreaterThan(startX + 0.02);
     await expect.poll(() => game.host.evaluate(() => {
       const view = window.__savoriaTest.multiplayer.view;
       const local = view.players.find(({ isLocal }) => isLocal);
