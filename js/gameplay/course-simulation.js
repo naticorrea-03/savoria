@@ -1,4 +1,5 @@
 import { AABB } from '../core/aabb.js';
+import { coursePlayerWorld, createCourseWorld } from './course-world.js';
 import { applyPlayerInput, createPlayerState } from './player-state.js';
 import { nextSeededRandom, seedToUint32 } from './seeded-random.js';
 
@@ -15,6 +16,7 @@ export function calculateCoopStars({ tomatoCount, totalTomatoes, players }) {
 }
 
 export function createCourseSimulation({ level, seed, players }) {
+  const world = createCourseWorld(level);
   const state = {
     phase: 'playing',
     tick: 0,
@@ -31,7 +33,7 @@ export function createCourseSimulation({ level, seed, players }) {
     projectiles: [],
     collectibles: [],
     hazards: [],
-    movingPlatforms: [],
+    movingPlatforms: world.movingPlatforms,
     doors: (level.doors ?? []).map((door, index) => ({
       id: `door-${index}`,
       at: normalizeDoorPosition(door.at),
@@ -44,9 +46,7 @@ export function createCourseSimulation({ level, seed, players }) {
       ? { position: [...level.goal], reachedPlayerIds: [] }
       : null,
     boss: null,
-    world: {
-      solids: (level.boxes ?? []).map(boxToSolid),
-    },
+    world,
   };
   state.hazards = (level.hazards ?? []).map((hazard, index) => {
     const [x, y, z, width, depth] = hazard;
@@ -78,29 +78,6 @@ export function createCourseSimulation({ level, seed, players }) {
     const player = createPlayerState({ ...definition, spawn: level.spawn });
     state.players[player.playerId] = player;
   }
-  state.movingPlatforms = (level.movers ?? []).map((mover, index) => {
-    const [x, y, z, width, height, depth] = mover.box;
-    const platform = {
-      id: `mover-${index}`,
-      base: [x, y, z],
-      to: [...mover.to],
-      period: mover.period,
-      phase: mover.phase ?? 0,
-      positionX: x,
-      positionY: y,
-      positionZ: z,
-      width,
-      height,
-      depth,
-      delta: [0, 0, 0],
-      aabb: new AABB(x, y, z, width, height, depth),
-    };
-    state.world.solids.push({
-      aabb: platform.aabb,
-      movingPlatformId: platform.id,
-    });
-    return platform;
-  });
   state.enemies = (level.enemies ?? []).map((enemy, index) => ({
     id: `enemy-${index}`,
     type: enemy.t,
@@ -112,6 +89,7 @@ export function createCourseSimulation({ level, seed, players }) {
     phase: nextSeededRandom(state) * 6,
     shootCooldown: 1.5,
     dead: false,
+    ...enemyDimensions(enemy.t),
   }));
   if (level.boss) {
     state.boss = {
@@ -202,7 +180,7 @@ function stepFixed(state, inputsByPlayer, seconds, acceptJumpPress) {
     state.players[playerId] = applyPlayerInput(
       player,
       acceptJumpPress ? input : { ...input, jumpPressed: false },
-      playerWorld(state.world, player),
+      coursePlayerWorld(state.world, player),
       seconds,
     );
   }
@@ -231,7 +209,51 @@ function stepFixed(state, inputsByPlayer, seconds, acceptJumpPress) {
       }
     }
   }
+  updateEnemyCollisions(state);
+  if (state.phase !== 'playing') return;
   updateProjectiles(state, seconds);
+}
+
+function updateEnemyCollisions(state) {
+  const players = Object.values(state.players)
+    .filter((player) => player.active && !player.safe)
+    .sort((left, right) => left.playerId.localeCompare(right.playerId));
+  for (const enemy of state.enemies) {
+    if (enemy.dead) continue;
+    const centerY = enemyVisualY(enemy);
+    const collider = new AABB(
+      enemy.positionX,
+      centerY,
+      enemy.positionZ,
+      enemy.half * 2,
+      enemy.half * 2,
+      enemy.half * 2,
+    );
+    for (const player of players) {
+      if (!playerAabb(player).intersects(collider)) continue;
+      const stomping = player.velocityY < -2
+        && player.positionY > centerY + enemy.half * 0.3;
+      if (stomping || player.power?.type === 'shield') {
+        enemy.dead = true;
+        if (stomping) player.velocityY = 10;
+        state.tomatoCount += 2;
+        break;
+      }
+      damagePlayer(state, player);
+      if (state.phase !== 'playing') return;
+    }
+  }
+}
+
+function enemyDimensions(type) {
+  const size = type === 'meatball' ? 1.5 : type === 'flyer' ? 1.4 : 1.7;
+  return { size, half: size * 0.42 };
+}
+
+function enemyVisualY(enemy) {
+  return enemy.type === 'flyer'
+    ? enemy.positionY
+    : enemy.positionY + enemy.size * 0.35;
 }
 
 function updateBossDecision(state, seconds) {
@@ -418,16 +440,6 @@ function updateTimedPower(player, seconds) {
   if (player.power.seconds <= 0) delete player.power;
 }
 
-function playerWorld(world, player) {
-  if (!player.power || !['speed', 'boost'].includes(player.power.type)) return world;
-  return {
-    ...world,
-    motion: player.power.type === 'speed'
-      ? { walkSpeed: 7.2 * 1.55, runSpeed: 10.6 * 1.55 }
-      : { jumpSpeed: 12.5 * 1.28 },
-  };
-}
-
 function damagePlayer(state, player) {
   if (player.power?.type === 'shield' || player.invulnerabilitySeconds > 0) return false;
   player.hearts -= 1;
@@ -578,11 +590,6 @@ function updateMovingPlatforms(state) {
       player.groundMoverId = platform.id;
     }
   }
-}
-
-function boxToSolid(box) {
-  const [x, y, z, width, height, depth] = box;
-  return { aabb: new AABB(x, y, z, width, height, depth) };
 }
 
 function playerDefinitions(players) {

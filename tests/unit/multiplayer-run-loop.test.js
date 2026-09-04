@@ -7,6 +7,10 @@ function view({
   tick = 1,
   accepted = 0,
   localX = 0,
+  localY = 2,
+  localVelocityY = 0,
+  localGrounded = true,
+  localPower = null,
   remoteX = 8,
   phase = 'playing',
   isHost = true,
@@ -30,7 +34,13 @@ function view({
         acceptedInputCount: accepted,
         snapRevision,
         snapReason,
-        position: { x: localX, y: 2, z: 0 },
+        position: { x: localX, y: localY, z: 0 },
+        velocity: { x: 0, y: localVelocityY, z: 0 },
+        grounded: localGrounded,
+        coyote: 0,
+        jumpBuffer: 0,
+        airJumpsRemaining: 1,
+        power: localPower,
       },
       {
         sessionId: 'remote',
@@ -75,6 +85,7 @@ class LoopbackAuthority {
         deliverAt: this.now + 75,
       }),
       onPresentation: (presentation) => { this.presentation = presentation; },
+      level: loopbackLevel(),
     });
   }
 
@@ -201,6 +212,14 @@ function playerView(sessionId, player, isLocal, acceptedInputCount) {
     connected: true,
     acceptedInputCount,
     position: { x: player.positionX, y: player.positionY, z: player.positionZ },
+    velocity: { x: player.velocityX, y: player.velocityY, z: player.velocityZ },
+    grounded: player.grounded,
+    coyote: player.coyote,
+    jumpBuffer: player.jumpBuffer,
+    airJumpsRemaining: player.airJumpsRemaining,
+    facing: player.facing,
+    groundMoverId: player.groundMoverId,
+    power: player.power ?? null,
   };
 }
 
@@ -248,6 +267,48 @@ test('running loop sends exact input, predicts locally, and follows the local pr
   assert.ok(presentation.local.position.x > 0);
   assert.deepEqual(presentation.cameraTarget, presentation.local.position);
   assert.equal(presentation.players.length, 2);
+});
+
+test('jump input raises the local presentation before an authoritative patch arrives', () => {
+  const sent = [];
+  let presentation;
+  const loop = new MultiplayerRunLoop({
+    sendInput: (input) => sent.push(input),
+    onPresentation: (next) => { presentation = next; },
+  });
+  loop.updateState(view({ localY: 0, localGrounded: true }), 1_000);
+  loop.press('Space');
+
+  loop.advance(1_000);
+  loop.advance(1_017);
+
+  assert.equal(sent[0].jumpPressed, true);
+  assert.equal(sent[0].jumpHeld, true);
+  assert.ok(presentation.local.position.y > 0);
+});
+
+test('local prediction applies the same speed power as authority', () => {
+  let normalPresentation;
+  let poweredPresentation;
+  const normal = new MultiplayerRunLoop({
+    sendInput: () => {},
+    onPresentation: (next) => { normalPresentation = next; },
+  });
+  const powered = new MultiplayerRunLoop({
+    sendInput: () => {},
+    onPresentation: (next) => { poweredPresentation = next; },
+  });
+  normal.updateState(view(), 1_000);
+  powered.updateState(view({ localPower: { type: 'speed', seconds: 8 } }), 1_000);
+  normal.press('ArrowRight');
+  powered.press('ArrowRight');
+
+  for (let frame = 0; frame <= 40; frame += 1) {
+    normal.advance(1_000 + frame * 17);
+    powered.advance(1_000 + frame * 17);
+  }
+
+  assert.ok(poweredPresentation.local.position.x > normalPresentation.local.position.x);
 });
 
 test('state acknowledgements retire pending inputs and reconnect reset clears histories', () => {

@@ -457,6 +457,7 @@ function renderLobby(view) {
 
 function enterMultiplayerCourse(view) {
   if (!multiplayerRunLoop) {
+    const definition = RELEASED_LEVELS.find(({ id }) => id === view.selectedLevelId);
     multiplayerRunLoop = new MultiplayerRunLoop({
       sendInput: (input) => multiplayerClient?.sendInput(input),
       requestResume: () => {
@@ -465,6 +466,7 @@ function enterMultiplayerCourse(view) {
       },
       onPresentation: renderMultiplayerPresentation,
       inputTarget: window,
+      level: definition ? buildReleasedLevel(definition) : null,
     });
   }
   multiplayerRunLoop.updateState(view, performance.now());

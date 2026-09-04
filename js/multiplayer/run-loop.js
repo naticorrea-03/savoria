@@ -1,4 +1,10 @@
 import { InputState } from '../gameplay/input-state.js';
+import { applyPlayerInput } from '../gameplay/player-state.js';
+import {
+  coursePlayerWorld,
+  createCourseWorld,
+  syncCourseWorld,
+} from '../gameplay/course-world.js';
 import {
   LocalPrediction,
   RemoteInterpolation,
@@ -25,6 +31,7 @@ export class MultiplayerRunLoop {
     requestFrame = (callback) => globalThis.requestAnimationFrame(callback),
     cancelFrame = (handle) => globalThis.cancelAnimationFrame(handle),
     inputTarget = globalThis,
+    level = null,
   }) {
     this.sendInput = sendInput;
     this.requestResume = requestResume;
@@ -32,6 +39,7 @@ export class MultiplayerRunLoop {
     this.requestFrame = requestFrame;
     this.cancelFrame = cancelFrame;
     this.inputTarget = inputTarget;
+    this.predictionWorld = createCourseWorld(level ?? {});
     this.input = new InputState();
     this.localPrediction = null;
     this.remoteInterpolation = new Map();
@@ -83,19 +91,25 @@ export class MultiplayerRunLoop {
     this.lastAuthoritativeTick = view.authoritativeTick;
     const local = view.players.find(({ isLocal }) => isLocal);
     if (!local) return false;
+    syncCourseWorld(this.predictionWorld, view.movingPlatforms, view.authoritativeTick);
 
     if (!this.localPrediction) {
       this.inputOrdinal = local.acceptedInputCount;
       this.localPrediction = new LocalPrediction({
-        initial: local.position,
-        simulate: predictPosition,
+        initial: predictionState(local),
+        simulate: (current, controls, seconds) => predictPlayerMotion(
+          current,
+          controls,
+          seconds,
+          this.predictionWorld,
+        ),
       });
       this.localSnapRevision = local.snapRevision;
     } else {
       const snapReason = local.snapRevision > this.localSnapRevision
         ? local.snapReason
         : undefined;
-      this.localPrediction.reconcile(local.position, local.acceptedInputCount, snapReason
+      this.localPrediction.reconcile(predictionState(local), local.acceptedInputCount, snapReason
         ? { now: receivedAt, reason: snapReason }
         : { now: receivedAt });
       this.localSnapRevision = Math.max(this.localSnapRevision, local.snapRevision);
@@ -239,11 +253,16 @@ export class MultiplayerRunLoop {
       this.inputOrdinal = local.acceptedInputCount;
       if (!this.localPrediction) {
         this.localPrediction = new LocalPrediction({
-          initial: local.position,
-          simulate: predictPosition,
+          initial: predictionState(local),
+          simulate: (current, controls, seconds) => predictPlayerMotion(
+            current,
+            controls,
+            seconds,
+            this.predictionWorld,
+          ),
         });
       } else {
-        this.localPrediction.reset(local.position);
+        this.localPrediction.reset(predictionState(local));
       }
       this.localSnapRevision = local.snapRevision;
     }
@@ -260,11 +279,58 @@ export class MultiplayerRunLoop {
   }
 }
 
-function predictPosition(position, controls, seconds) {
-  const speed = controls.running ? 10.6 : 7.2;
+function predictionState(player = {}) {
+  const position = player.position ?? player;
+  const velocity = player.velocity ?? {};
   return {
-    x: position.x + controls.axis * speed * seconds,
-    y: position.y,
-    z: position.z,
+    x: Number(position.x) || 0,
+    y: Number(position.y) || 0,
+    z: Number(position.z) || 0,
+    velocityX: Number(player.velocityX ?? velocity.x) || 0,
+    velocityY: Number(player.velocityY ?? velocity.y) || 0,
+    velocityZ: Number(player.velocityZ ?? velocity.z) || 0,
+    width: Number(player.width) || 0.8,
+    height: Number(player.height) || 1.55,
+    depth: Number(player.depth) || 0.8,
+    grounded: player.grounded === true,
+    coyote: Number(player.coyote) || 0,
+    jumpBuffer: Number(player.jumpBuffer) || 0,
+    airJumpsRemaining: Number.isInteger(player.airJumpsRemaining)
+      ? player.airJumpsRemaining
+      : 1,
+    facing: Number(player.facing) || 1,
+    groundMoverId: player.groundMoverId || null,
+    power: player.power ? { ...player.power } : null,
   };
+}
+
+function predictPlayerMotion(state, controls, seconds, world) {
+  const platform = world.movingPlatforms.find(({ id }) => id === state.groundMoverId);
+  const carriedX = state.x + (platform?.velocityX ?? 0) * seconds;
+  const carriedY = state.y + (platform?.velocityY ?? 0) * seconds;
+  const next = applyPlayerInput({
+    ...state,
+    positionX: carriedX,
+    positionY: carriedY,
+    positionZ: state.z,
+  }, controls, coursePlayerWorld(world, state), seconds);
+  next.groundMoverId = findGroundMoverId(next, world);
+  return predictionState({
+    ...next,
+    position: {
+      x: next.positionX,
+      y: next.positionY,
+      z: next.positionZ,
+    },
+  });
+}
+
+function findGroundMoverId(player, world) {
+  if (!player.grounded) return null;
+  return world.solids.find(({ aabb, movingPlatformId }) => (
+    movingPlatformId
+    && player.positionX > aabb.minX - player.width / 2
+    && player.positionX < aabb.maxX + player.width / 2
+    && Math.abs(player.positionY - aabb.maxY) < 0.06
+  ))?.movingPlatformId ?? null;
 }
