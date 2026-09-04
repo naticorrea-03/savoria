@@ -6,7 +6,7 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 
 await page.goto(`${origin}/play/`, { waitUntil: 'networkidle' });
 await page.getByRole('button', { name: 'Play' }).click();
-await page.getByRole('button', { name: /^Fatsio/ }).click();
+await page.getByRole('button', { name: /^Hungrio/ }).click();
 await page.getByRole('button', { name: /1-1 Farfalle Fields/ }).click();
 await page.locator('#app[data-screen="playing"]').waitFor();
 await page.locator('#game-stage canvas').waitFor();

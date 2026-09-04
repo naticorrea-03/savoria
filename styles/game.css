@@ -636,11 +636,7 @@ h1.screen-title {
 }
 
 .title-brand {
-  background: #130b06;
-  border: 3px solid #f6c95b;
-  border-radius: 20px;
-  box-shadow: 0 6px 0 #7f3c12, 0 14px 24px rgb(67 26 7 / 26%);
-  overflow: hidden;
+  background: transparent;
   width: clamp(270px, 25vw, 390px);
 }
 
@@ -898,10 +894,6 @@ h1.screen-title {
   padding: 5px 12px;
   text-align: center;
   text-shadow: 0 2px 0 #5a260f;
-}
-
-.title-chef.is-selected img {
-  filter: drop-shadow(0 0 10px #fff5a9) drop-shadow(0 12px 3px rgb(56 31 15 / 28%));
 }
 
 .title-chef.is-selected figcaption {

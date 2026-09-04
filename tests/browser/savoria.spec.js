@@ -71,7 +71,7 @@ async function openWorldOne(page) {
   await page.goto('/play/');
   await waitForTitle(page);
   await page.getByRole('button', { name: 'Solo Adventure' }).click();
-  await page.getByRole('button', { name: /^Fatsio/ }).click();
+  await page.getByRole('button', { name: /^Hungrio/ }).click();
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'world');
 }
 
@@ -81,6 +81,33 @@ async function startOneOne(page) {
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'playing');
   await expect(page.locator('#game-stage canvas')).toHaveCount(1);
 }
+
+test('home logo has transparent corners without a dark backing panel', async ({ page }) => {
+  await page.goto('/play/');
+  await waitForTitle(page);
+
+  const logoAlpha = await page.locator('.title-brand img').evaluate(async (image) => {
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext('2d');
+    context.drawImage(image, 0, 0);
+    return context.getImageData(0, 0, 1, 1).data[3];
+  });
+  expect(logoAlpha).toBe(0);
+  await expect(page.locator('.title-brand')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+});
+
+test('selected title chef uses its nameplate without an outline glow', async ({ page }) => {
+  await page.goto('/play/');
+  await waitForTitle(page);
+
+  const filters = await page.locator('.title-chef img').evaluateAll((images) => (
+    images.map((image) => getComputedStyle(image).filter)
+  ));
+  expect(new Set(filters).size).toBe(1);
+});
 
 test('home opens the game directly and shows every planned world', async ({ page }) => {
   const diagnostics = await monitorPage(page);
@@ -272,7 +299,7 @@ test('production progression unlocks, completes, and resumes 1-2', async ({ page
   await page.reload();
   await waitForTitle(page);
   await page.getByRole('button', { name: 'Solo Adventure' }).click();
-  await page.getByRole('button', { name: /^Fatsio/ }).click();
+  await page.getByRole('button', { name: /^Hungrio/ }).click();
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'world');
   const penneRidge = page.getByRole('button', { name: /1-2 Penne Ridge/ });
   await expect(penneRidge).toBeEnabled();
@@ -309,7 +336,7 @@ test('production progression unlocks, completes, and resumes 1-2', async ({ page
   await page.reload();
   await waitForTitle(page);
   await page.getByRole('button', { name: 'Solo Adventure' }).click();
-  await page.getByRole('button', { name: /^Fatsio/ }).click();
+  await page.getByRole('button', { name: /^Hungrio/ }).click();
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'world');
   await expect(page.getByRole('button', { name: /1-2 Penne Ridge, 2 of 3 stars/ })).toBeEnabled();
   await expect(page.getByRole('button', { name: /2-1 Nori Narrows/ })).toBeEnabled();

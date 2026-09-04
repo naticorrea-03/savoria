@@ -6,7 +6,7 @@ const browser = await chromium.launch({ headless: true });
 async function startCourse(page, levelName) {
   await page.goto(`${origin}/play/`, { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'Start Adventure' }).click();
-  await page.getByRole('button', { name: /^Fatsio/ }).click();
+  await page.getByRole('button', { name: /^Hungrio/ }).click();
   await page.getByRole('button', { name: levelName }).click();
   await page.locator('#app[data-screen="playing"]').waitFor();
   await page.locator('#game-stage canvas').waitFor();

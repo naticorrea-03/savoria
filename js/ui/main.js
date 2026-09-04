@@ -352,12 +352,13 @@ function createPlayerCard(player, view) {
   card.dataset.characterId = player.characterId;
   card.style.setProperty('--player-color', player.color);
   card.setAttribute('role', 'listitem');
-  card.setAttribute('aria-label', `${player.guestName}, ${player.characterId}, ${player.ready ? 'ready' : 'not ready'}`);
+  const character = CHARACTERS.find(({ id }) => id === player.characterId);
+  const characterName = character?.name ?? CHARACTERS[0].name;
+  card.setAttribute('aria-label', `${player.guestName}, ${characterName}, ${player.ready ? 'ready' : 'not ready'}`);
 
   const avatar = document.createElement('div');
   avatar.className = 'lobby-player-avatar';
   const image = document.createElement('img');
-  const character = CHARACTERS.find(({ id }) => id === player.characterId);
   image.src = character?.img ?? CHARACTERS[0].img;
   image.alt = '';
   avatar.append(image);

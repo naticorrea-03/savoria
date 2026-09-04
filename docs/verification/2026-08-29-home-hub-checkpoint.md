@@ -6,7 +6,7 @@ Last updated: 2026-08-30
 ## Scope
 
 - Rebuilt the playable title screen as a Savoria adventure lobby.
-- Kept Chefno, Fatsio, and Dinnerette on their original static artwork.
+- Kept Chefno, Hungrio, and Dinnerette on their original static artwork.
 - Added one clear Continue adventure action.
 - Added real star, course, world, and next-course progress from the saved game.
 - Shows all six planned worlds in the destination list.
