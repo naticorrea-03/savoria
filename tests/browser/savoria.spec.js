@@ -82,12 +82,10 @@ async function startOneOne(page) {
   await expect(page.locator('#game-stage canvas')).toHaveCount(1);
 }
 
-test('landing reaches chef selection and shows every planned world', async ({ page }) => {
+test('home opens the game directly and shows every planned world', async ({ page }) => {
   const diagnostics = await monitorPage(page);
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /run the food course/i })).toBeVisible();
-  await page.getByRole('link', { name: 'Play Savoria' }).click();
   await expect(page).toHaveURL(/\/play\/$/);
   await waitForTitle(page);
   await expect(page.getByRole('region', { name: 'Chef party' })).toBeVisible();

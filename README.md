@@ -76,7 +76,7 @@ npm run test:browser
 
 ## Architecture
 
-- `index.html` is the landing page.
+- `index.html` sends the root URL straight to the game.
 - `play/index.html` is the game shell.
 - `js/levels/` contains the level DSL, validation, compiler, themes, and released World 1 and World 2 data.
 - `js/core/`, `js/gameplay/`, and `js/ui/` own rendering, game rules, and screens.

@@ -3,120 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Play Savoria, explore Pasta Plains and Sushi Shores, and learn how to revise an existing course.">
-  <title>Savoria | A Delicious Adventure</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍝</text></svg>">
-  <link rel="stylesheet" href="styles/tokens.css">
-  <link rel="stylesheet" href="styles/landing.css">
+  <meta http-equiv="refresh" content="0; url=play/">
+  <title>Savoria</title>
+  <script>
+    const destination = new URL('play/', window.location.href);
+    destination.search = window.location.search;
+    destination.hash = window.location.hash;
+    window.location.replace(destination);
+  </script>
 </head>
 <body>
-  <header class="site-header">
-    <a class="site-mark" href="#hero" aria-label="Savoria home">Savoria</a>
-    <nav class="site-nav" aria-label="Main navigation">
-      <a href="#world-one">Worlds</a>
-      <a href="#controls">Controls</a>
-      <a href="#contribute">Revise a course</a>
-      <a class="nav-play" data-play href="play/">Play</a>
-    </nav>
-  </header>
-
-  <main class="landing-main">
-    <div class="pasta-course" aria-hidden="true">
-      <span class="ribbon-lead"></span>
-      <span class="ribbon-one"></span>
-      <span class="ribbon-two"></span>
-      <span class="ribbon-three"></span>
-    </div>
-
-    <section class="landing-section" id="hero">
-      <div class="hero-copy">
-        <div class="logo-stage hero-logo-stage">
-          <img class="hero-logo" src="assets/sprites/savoria_logo.png" alt="Savoria: A Delicious Adventure">
-        </div>
-        <p class="eyebrow">A community-built food platformer</p>
-        <h1><span class="sr-only">Savoria: </span>Run the food course.</h1>
-        <p>Jump through Pasta Plains and Sushi Shores. Collect tomatoes along the way.</p>
-        <a class="button button-primary" data-play href="play/">Play Savoria</a>
-        <span class="hero-stamp">Desktop<br>keyboard<br>adventure</span>
-      </div>
-    </section>
-
-    <section class="landing-section" id="world-one">
-      <div class="section-grid">
-        <figure class="world-preview">
-          <img src="assets/sprites/world1_thumb.png" alt="The hills, pasta, and sauce rivers of Pasta Plains">
-        </figure>
-        <div class="world-copy">
-          <p class="eyebrow">Worlds 1 and 2 are ready</p>
-          <h2>Pasta Plains + Sushi Shores</h2>
-          <p>Four hand-built courses. Three chefs. One connected journey.</p>
-          <ol class="course-list">
-            <li><span>1-1</span> Farfalle Fields</li>
-            <li><span>1-2</span> Penne Ridge</li>
-            <li><span>2-1</span> Nori Narrows</li>
-            <li><span>2-2</span> Wasabi Falls</li>
-          </ol>
-        </div>
-      </div>
-    </section>
-
-    <section class="landing-section" id="controls">
-      <div class="controls-inner">
-        <p class="eyebrow">Keyboard controls</p>
-        <h2>Simple moves. Tricky timing.</h2>
-        <div class="control-line">
-          <div class="keys"><kbd>A</kbd><kbd>D</kbd><kbd>←</kbd><kbd>→</kbd></div>
-          <p>Move left or right</p>
-        </div>
-        <div class="control-line">
-          <div class="keys"><kbd>Shift</kbd></div>
-          <p>Hold to run</p>
-        </div>
-        <div class="control-line">
-          <div class="keys"><kbd>Space</kbd><kbd>↑</kbd></div>
-          <p>Jump. Hold for more height.</p>
-        </div>
-        <div class="control-line">
-          <div class="keys"><kbd>Esc</kbd></div>
-          <p>Pause the course</p>
-        </div>
-      </div>
-    </section>
-
-    <section class="landing-section" id="contribute">
-      <div class="contribute-panel">
-        <div class="contribute-copy">
-          <p class="eyebrow">Improve a course</p>
-          <h2>Start with a course revision.</h2>
-          <p>Revise 1-1 or 1-2 first. Propose a new released course before adding it.</p>
-          <a class="button button-secondary" href="https://github.com/nataliacorrea03/savoria">See the project on GitHub</a>
-        </div>
-        <pre class="recipe" aria-label="Current Farfalle Fields recipe"><code>level(1, 1, 'Farfalle Fields', 'pasta', 240, [
-  ['run', 12, { coins: 5, tutorial: 'move', deco: 'cypress' }],
-  ['run', 6, { tutorial: 'jump' }],
-  ['gap', 3.5, { arc: 5 }],
-  ['run', 14, { enemy: 'meatball', tutorial: 'stomp', deco: 'windmill', decoS: 1.2 }],
-  ['blocks', 3],
-  ['checkpoint', 0],
-  ['river', 9],
-  ['run', 16, { tutorial: 'run', coins: 4, deco: 'cypress' }],
-  ['gap', 5, { arc: 5, requiresRun: true }],
-  ['goal', 0]
-]);</code></pre>
-      </div>
-    </section>
-  </main>
-
-  <footer class="site-footer">
-    <p>Built one course at a time.</p>
-    <nav class="footer-links" aria-label="Project links">
-      <a href="https://github.com/nataliacorrea03/savoria">GitHub</a>
-      <a href="README.md">Local setup</a>
-      <a href="https://github.com/nataliacorrea03/savoria#credits">Credits</a>
-      <a href="https://github.com/nataliacorrea03/savoria#licensing">Licensing</a>
-    </nav>
-  </footer>
-
-  <script type="module" src="js/site.js"></script>
+  <p><a href="play/">Open Savoria</a></p>
 </body>
 </html>
