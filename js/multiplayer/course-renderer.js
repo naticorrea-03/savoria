@@ -160,7 +160,7 @@ export class MultiplayerCourseRenderer {
       if (!visual) continue;
       visual.sprite.position.set(
         enemy.position.x,
-        enemy.position.y + (visual.size ?? 1.5) * 0.35,
+        enemy.position.y + (enemy.type === 'flyer' ? 0 : (visual.size ?? 1.5) * 0.35),
         enemy.position.z,
       );
       visual.sprite.visible = !enemy.dead;

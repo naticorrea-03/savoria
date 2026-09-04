@@ -19,6 +19,11 @@ export const PlayerState = schema({
   velocityY: t.number(),
   velocityZ: t.number(),
   grounded: t.boolean(),
+  coyote: t.number(),
+  jumpBuffer: t.number(),
+  airJumpsRemaining: t.uint8(),
+  facing: t.number(),
+  groundMoverId: t.string(),
   hearts: t.uint8(),
   lives: t.uint8(),
   invulnerabilitySeconds: t.number(),
@@ -280,6 +285,11 @@ function applySimulationPlayer(target, source) {
   target.velocityY = source.velocityY ?? 0;
   target.velocityZ = source.velocityZ ?? 0;
   target.grounded = source.grounded === true;
+  target.coyote = source.coyote ?? 0;
+  target.jumpBuffer = source.jumpBuffer ?? 0;
+  target.airJumpsRemaining = source.airJumpsRemaining ?? 1;
+  target.facing = source.facing ?? 1;
+  target.groundMoverId = source.groundMoverId ?? '';
   target.hearts = source.hearts ?? 3;
   target.lives = source.lives ?? 4;
   target.invulnerabilitySeconds = source.invulnerabilitySeconds ?? 0;

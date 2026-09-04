@@ -121,6 +121,7 @@ export class LocalPrediction {
 
 function copyPosition(value = {}) {
   return {
+    ...value,
     x: Number(value.x) || 0,
     y: Number(value.y) || 0,
     z: Number(value.z) || 0,

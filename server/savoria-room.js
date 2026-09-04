@@ -205,7 +205,11 @@ export class SavoriaRoom extends Room {
       this.requirePlayer(client.sessionId);
       if (this.state.phase !== 'playing') return { ok: false };
       const player = this.state.players.get(client.sessionId);
-      this.latestInputs.set(client.sessionId, { ...payload });
+      const previous = this.latestInputs.get(client.sessionId) ?? NEUTRAL_INPUT;
+      this.latestInputs.set(client.sessionId, {
+        ...payload,
+        jumpPressed: previous.jumpPressed || payload.jumpPressed,
+      });
       player.acceptedInputCount += 1;
       return { ok: true };
     });
@@ -317,6 +321,24 @@ export class SavoriaRoom extends Room {
         throw applicationError('Unknown available browser collectible');
       }
       snapPlayer(player, collectible.position);
+      this.latestInputs.set(playerId, { ...NEUTRAL_INPUT });
+      return { ok: true };
+    }
+
+    if (payload.action === 'moving-platform') {
+      if (!hasExactKeys(payload, ['action', 'playerId', 'targetId'])) {
+        throw applicationError('Invalid browser moving-platform control');
+      }
+      const platform = this.courseState.movingPlatforms
+        .find(({ id }) => id === payload.targetId);
+      if (!platform) throw applicationError('Unknown browser moving platform');
+      snapPlayer(player, [
+        platform.aabb.minX + player.width / 2 + 0.1,
+        platform.aabb.maxY,
+        platform.positionZ,
+      ]);
+      player.grounded = true;
+      player.groundMoverId = platform.id;
       this.latestInputs.set(playerId, { ...NEUTRAL_INPUT });
       return { ok: true };
     }

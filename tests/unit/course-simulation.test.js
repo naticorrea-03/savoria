@@ -74,6 +74,41 @@ test('moving platforms keep their compiled collider and carry a standing player'
   assert.equal(state.players.p1.grounded, true);
 });
 
+test('a chef can jump onto a moving platform and keep walking on it', () => {
+  const state = gameplay.createCourseSimulation({
+    level: fixtureLevel({
+      spawn: [-2, 0, 0],
+      boxes: [[-2.5, -0.5, 0, 5, 1, 4, 'ground']],
+      enemies: [],
+      movers: [{
+        box: [1.8, 0.4, 0, 3.4, 0.8, 4, 'plat'],
+        to: [1, 0, 0],
+        period: 4,
+        phase: 0,
+      }],
+    }),
+    seed: 11,
+    players: [{ playerId: 'p1', characterId: 'fatsio' }],
+  });
+  let boarded = false;
+
+  for (let tick = 0; tick < 100; tick += 1) {
+    gameplay.stepCourseSimulation(state, {
+      p1: {
+        axis: tick < 42 ? 1 : 0,
+        running: false,
+        jumpPressed: tick === 5,
+        jumpHeld: tick < 36,
+      },
+    }, 1 / 60);
+    boarded ||= state.players.p1.groundMoverId === 'mover-0';
+  }
+
+  assert.equal(boarded, true);
+  assert.equal(state.players.p1.grounded, true);
+  assert.ok(state.players.p1.positionY >= state.movingPlatforms[0].aabb.maxY - 0.01);
+});
+
 test('a checkpoint becomes shared and supplies the next individual respawn', () => {
   const state = gameplay.createCourseSimulation({
     level: fixtureLevel({ checkpoint: [2, 0, 0], enemies: [] }),
@@ -548,6 +583,51 @@ test('enemies ignore a closer goal-safe chef when selecting a target', () => {
   }
 
   assert.equal(state.projectiles[0].targetPlayerId, 'p1');
+});
+
+test('touching a walking enemy damages either active chef', () => {
+  const state = gameplay.createCourseSimulation({
+    level: fixtureLevel({
+      spawn: [0, 0, 0],
+      enemies: [{ t: 'meatball', p: [0, 0.4, 0], range: 1.5 }],
+    }),
+    seed: 62,
+    players: [
+      { playerId: 'p1', characterId: 'fatsio' },
+      { playerId: 'p2', characterId: 'chefno' },
+    ],
+  });
+  state.players.p1.positionX = 12;
+  state.players.p2.positionX = state.enemies[0].positionX;
+  state.players.p2.positionY = 0;
+
+  gameplay.stepCourseSimulation(state, { p1: {}, p2: {} }, 1 / 60);
+
+  assert.equal(state.players.p1.hearts, 3);
+  assert.equal(state.players.p2.hearts, 2);
+  assert.equal(state.enemies[0].dead, false);
+});
+
+test('stomping a walking enemy removes it and bounces the chef', () => {
+  const state = gameplay.createCourseSimulation({
+    level: fixtureLevel({
+      spawn: [0, 0, 0],
+      enemies: [{ t: 'meatball', p: [0, 0.4, 0], range: 1.5 }],
+    }),
+    seed: 63,
+    players: [{ playerId: 'p1', characterId: 'fatsio' }],
+  });
+  state.enemies[0].phase = 0;
+  state.players.p1.positionX = state.enemies[0].positionX;
+  state.players.p1.positionY = 1.35;
+  state.players.p1.velocityY = -5;
+
+  gameplay.stepCourseSimulation(state, { p1: {} }, 1 / 60);
+
+  assert.equal(state.enemies[0].dead, true);
+  assert.equal(state.players.p1.velocityY, 10);
+  assert.equal(state.players.p1.hearts, 3);
+  assert.equal(state.tomatoCount, 2);
 });
 
 test('boss targeting and attack phases are plain deterministic decisions', () => {

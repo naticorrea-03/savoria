@@ -290,6 +290,50 @@ test('valid input drives the authoritative 60 Hz simulation and malformed input 
   await guest.leave();
 });
 
+test('a jump press stays latched when a held packet arrives before the next simulation step', async () => {
+  const { host, guest, serverRoom } = await createStartedRoom();
+  const player = serverRoom.courseState.players[host.sessionId];
+  player.positionY = 0;
+  player.velocityY = 0;
+  player.grounded = true;
+  const startY = player.positionY;
+
+  await host.request(MESSAGE.INPUT, {
+    axis: 0,
+    running: false,
+    jumpPressed: true,
+    jumpHeld: true,
+  });
+  await host.request(MESSAGE.INPUT, {
+    axis: 0,
+    running: false,
+    jumpPressed: false,
+    jumpHeld: true,
+  });
+  await serverRoom.waitForNextTimestep();
+
+  assert.ok(serverRoom.courseState.players[host.sessionId].positionY > startY);
+  await guest.leave();
+});
+
+test('enemy contact changes the authoritative player health sent to both clients', async () => {
+  const { host, guest, serverRoom } = await createStartedRoom();
+  const enemy = serverRoom.courseState.enemies[0];
+  const player = serverRoom.courseState.players[host.sessionId];
+  enemy.phase = 0;
+  player.positionX = enemy.positionX;
+  player.positionY = 0;
+  player.velocityX = 0;
+  player.velocityY = 0;
+  player.invulnerabilitySeconds = 0;
+
+  await serverRoom.waitForNextTimestep();
+
+  assert.equal(serverRoom.courseState.players[host.sessionId].hearts, 2);
+  assert.equal(serverRoom.state.players.get(host.sessionId).hearts, 2);
+  await guest.leave();
+});
+
 test('accepted input acknowledgement is ordered without changing the four-field payload', async () => {
   const { host, guest, serverRoom } = await createStartedRoom();
   const payload = {
@@ -473,6 +517,39 @@ test('browser controls drive real authoritative pickups, checkpoints, respawns, 
   await host.request('test-control', { action: 'goal', playerId: guest.sessionId });
   await waitUntil(() => serverRoom.state.phase === 'completed');
   assert.equal(serverRoom.state.completion.present, true);
+});
+
+test('browser moving-platform setup preserves real authoritative walking input', async () => {
+  const host = await createClient();
+  const guest = await joinClient(host.roomId, { characterId: 'chefno' });
+  const serverRoom = testServer.getRoomById(host.roomId);
+  await host.request(MESSAGE.SELECT_LEVEL, { levelId: '1-2' });
+  await host.request(MESSAGE.READY, { ready: true });
+  await guest.request(MESSAGE.READY, { ready: true });
+  await host.request(MESSAGE.START, {});
+  const platform = serverRoom.courseState.movingPlatforms[0];
+
+  assert.deepEqual(await host.request(MESSAGE.TEST_CONTROL, {
+    action: 'moving-platform',
+    playerId: host.sessionId,
+    targetId: platform.id,
+  }), { ok: true });
+  assert.equal(serverRoom.courseState.players[host.sessionId].groundMoverId, platform.id);
+  const startX = serverRoom.courseState.players[host.sessionId].positionX;
+  await host.request(MESSAGE.INPUT, {
+    axis: 1,
+    running: false,
+    jumpPressed: false,
+    jumpHeld: false,
+  });
+  await serverRoom.waitForNextTimestep();
+  await serverRoom.waitForNextTimestep();
+
+  const player = serverRoom.courseState.players[host.sessionId];
+  assert.ok(player.positionX > startX);
+  assert.equal(player.grounded, true);
+  assert.ok(Math.abs(player.positionY - platform.aabb.maxY) < 0.06);
+  await guest.leave();
 });
 
 test('alternating action types share one per-client rate limit', async () => {
