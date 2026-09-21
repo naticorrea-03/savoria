@@ -20,7 +20,7 @@
     "@playwright/test": "1.62.1"
   },
   "dependencies": {
-    "@colyseus/core": "0.18.10",
+    "@colyseus/core": "0.18.14",
     "@colyseus/schema": "5.0.27",
     "@colyseus/sdk": "0.18.2",
     "@colyseus/ws-transport": "0.18.2",
