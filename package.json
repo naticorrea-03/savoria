@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@colyseus/core": "0.18.10",
-    "@colyseus/schema": "5.0.27",
+    "@colyseus/schema": "5.0.33",
     "@colyseus/sdk": "0.18.2",
     "@colyseus/ws-transport": "0.18.2",
     "express": "5.2.1"
