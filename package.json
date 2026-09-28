@@ -16,7 +16,7 @@
   "devDependencies": {
     "@colyseus/loadtest": "0.18.2",
     "@colyseus/testing": "0.18.5",
-    "@colyseus/tools": "0.18.3",
+    "@colyseus/tools": "0.18.4",
     "@playwright/test": "1.62.1"
   },
   "dependencies": {
