@@ -181,6 +181,21 @@ test('a late patch extrapolates the remote player briefly, then holds', () => {
   assert.equal(new RemoteInterpolation().sample(1000), null);
 });
 
+// CI caught this in a real room: a busy page received two patches in the
+// same millisecond, and extrapolation divided by that gap. The remote chef
+// was drawn 2 to 3 units ahead of the platform it stood on for one frame.
+test('patches received in a burst never throw the remote player ahead', () => {
+  const remote = new RemoteInterpolation({ extrapolateMs: 80 });
+  remote.push(position(0), 3, 0);
+  remote.push(position(0.1), 6, 199);
+  remote.push(position(0.2), 9, 200);
+
+  const furthest = remote.sample(380).x;
+  // Three ticks moved 0.1, so 80 ms (4.8 ticks) can add 0.16 at most.
+  assert.ok(furthest <= 0.2 + 0.16 + 1e-9, `extrapolated to ${furthest}`);
+  assert.ok(furthest > 0.2);
+});
+
 test('remote samples report the fractional tick they belong to', () => {
   const remote = new RemoteInterpolation();
   remote.push(position(0), 10, 0);

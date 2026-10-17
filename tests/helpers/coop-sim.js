@@ -62,6 +62,9 @@ export function runCoopSession({
   patchJitterMs = 0,
   hitchEveryMs = 0,
   hitchMs = 45,
+  // A busy page reads the socket in bursts: every patch that arrived during
+  // a long frame is handled at once. Delivery snaps to this grid.
+  patchBurstMs = 0,
 }) {
   let seed = 0x2f6e2b1;
   const random = () => {
@@ -112,9 +115,12 @@ export function runCoopSession({
 
   const publishPatch = () => {
     const snapshot = createCourseSnapshot(server);
-    const at = clock + latencyMs + random() * patchJitterMs;
+    let at = clock + latencyMs + random() * patchJitterMs;
+    if (patchBurstMs > 0) at = Math.ceil(at / patchBurstMs) * patchBurstMs;
     // Keep delivery in order, the way one WebSocket does.
+    // Patches handled in one burst are still read a millisecond apart.
     const last = toClient.at(-1)?.at ?? 0;
+    if (patchBurstMs > 0 && at <= last) at = last + 1;
     toClient.push({ at: Math.max(at, last), view: toView(snapshot, localId, { ...accepted }), snapshot });
   };
   publishPatch();

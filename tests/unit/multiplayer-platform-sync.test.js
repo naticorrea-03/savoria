@@ -88,6 +88,27 @@ for (const latencyMs of [30, 80, 140]) {
   }
 }
 
+// Found by the two-browser drift test on a slow CI runner: the page drew
+// about 5 frames a second and handled patches in bursts. Two patches read a
+// millisecond apart made remote extrapolation divide by that millisecond, and
+// the remote rider jumped 2 to 3 units ahead of the platform for a frame.
+// Without the fix this setup swings the remote rider by about 21 units.
+for (const latencyMs of [0, 80]) {
+  test(`remote rider stays glued when patches arrive in bursts at ${latencyMs} ms`, () => {
+    const result = runCoopSession({
+      level,
+      seconds: 12,
+      latencyMs,
+      frameHz: 60,
+      startOnMover: FLOATING,
+      patchBurstMs: 240,
+    });
+    const { local, remote } = riderOffsets(result);
+    assert.ok(swing(remote) < 0.02, `remote rider drifted ${swing(remote).toFixed(3)}`);
+    assert.ok(swing(local) < 0.02, `local rider drifted ${swing(local).toFixed(3)}`);
+  });
+}
+
 test('prediction agrees with the server while walking back and forth on the platform', () => {
   const result = runCoopSession({
     level,

@@ -262,12 +262,15 @@ export class MultiplayerRunLoop {
   // fixed, so a remote rider moves with the platform instead of sliding on it.
   remotePosition(player, now, platforms) {
     const remote = this.remoteInterpolation.get(player.sessionId);
-    const sampled = remote?.sampleWithTick(now);
+    const platform = player.grounded === true
+      ? this.predictionWorld.movingPlatforms.find(({ id }) => id === player.groundMoverId)
+      : null;
+    // A rider is not extrapolated: holding the last patch and adding how far
+    // the platform moved since keeps it exactly on the platform, even when
+    // patches arrive in bursts.
+    const sampled = remote?.sampleWithTick(now, { extrapolate: !platform });
     if (!sampled) return player.position;
-    const platform = this.predictionWorld.movingPlatforms.find(
-      ({ id }) => id === player.groundMoverId,
-    );
-    if (!platform || player.grounded !== true) return sampled.value;
+    if (!platform) return sampled.value;
     const then = moverPositionAt(platform, sampled.tick / COURSE_TICKS_PER_SECOND);
     const current = platforms.find(({ id }) => id === platform.id)?.position;
     if (!current) return sampled.value;
