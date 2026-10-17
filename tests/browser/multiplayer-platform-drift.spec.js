@@ -15,8 +15,6 @@ import { expect, test } from '@playwright/test';
 
 const SERVER_PORT = 2567;
 const MOVER_ID = 'mover-1';
-const MOVER_BASE_X = 102.1;
-const MOVER_TRAVEL = 3.5;
 const PERIOD_MS = 5000;
 const MAX_SWING = 0.03;
 
@@ -168,14 +166,19 @@ function recordDrawnFrames(page, moverId) {
   }, moverId);
 }
 
-// Waits until the mover sits within [min, max] of its travel (0 left, 1 right).
-async function waitForMover(page, min, max) {
-  await expect.poll(() => page.evaluate(({ id, base, travel, low, high }) => {
-    const platform = window.__savoriaTest.multiplayer.view.movingPlatforms
-      .find((candidate) => candidate.id === id);
-    const progress = (platform.position.x - base) / travel;
-    return progress >= low && progress <= high;
-  }, { id: MOVER_ID, base: MOVER_BASE_X, travel: MOVER_TRAVEL, low: min, high: max }), {
+// Waits until the mover is about to arrive at one end of its gap, read from
+// the server clock. The platform rests at the left end at phase 0 and the
+// right end at half a period. Boarding then starts while the platform is
+// still closing in, so a slow runner has close to a second before the gap
+// opens again. Waiting on position alone could start just as it left.
+async function waitForMoverArriving(page, end) {
+  const arriveAtMs = end === 'left' ? PERIOD_MS : PERIOD_MS / 2;
+  await expect.poll(() => page.evaluate(({ arrive, period }) => {
+    const tick = window.__savoriaTest.multiplayer.view.authoritativeTick;
+    const phaseMs = ((tick * 1000) / 60) % period;
+    const untilArrival = arrive - phaseMs;
+    return untilArrival > 0 && untilArrival <= 450;
+  }, { arrive: arriveAtMs, period: PERIOD_MS }), {
     timeout: PERIOD_MS * 2,
     intervals: [20],
   }).toBe(true);
@@ -297,9 +300,9 @@ for (const oneWayDelayMs of [0, 40]) {
         window.__savoriaTest.multiplayer.view.players.every(({ grounded }) => grounded)
       ))).toBe(true);
 
-      await waitForMover(game.host, 0, 0.05);
+      await waitForMoverArriving(game.host, 'left');
       await boardWithKeyboard(game.host, ids.host, 'left');
-      await waitForMover(game.host, 0.95, 1);
+      await waitForMoverArriving(game.host, 'right');
       await boardWithKeyboard(game.guest, ids.guest, 'right');
       for (const [page, id] of [[game.host, ids.host], [game.guest, ids.guest]]) {
         await waitUntilSettled(page, id);
