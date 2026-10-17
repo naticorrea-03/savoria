@@ -310,7 +310,7 @@ function renderTitleHub(doc, state) {
     'title-current-course': `${progress.currentLevelId} ${progress.currentLevelName}`,
     'title-world-one-stars': `${progress.worldStars[1]}/6 stars`,
     'title-world-two-stars': sushiOpen ? `${progress.worldStars[2]}/9 stars` : 'Locked',
-    'title-world-three-stars': tacoOpen ? `${progress.worldStars[3]}/6 stars` : 'Locked',
+    'title-world-three-stars': tacoOpen ? `${progress.worldStars[3]}/9 stars` : 'Locked',
   };
   for (const [id, text] of Object.entries(copy)) {
     const element = doc.getElementById(id);

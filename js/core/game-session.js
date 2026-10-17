@@ -4,9 +4,11 @@ import { AABB } from './aabb.js';
 import { buildChefSprite, animateChefSprite } from './chef-sprite.js';
 import { CameraFollow } from './camera-follow.js';
 import { FixedStepLoop } from './fixed-step-loop.js';
+import { BossPresenter } from './boss-presenter.js';
 import { SessionFx } from './session-fx.js';
 import { buildWorldScene } from './world-builder.js';
 import { updateBoss } from '../gameplay/boss.js';
+import { createBossFight } from '../gameplay/boss-fight.js';
 import { updateEntities } from '../gameplay/entities.js';
 import { InputState } from '../gameplay/input-state.js';
 import {
@@ -93,6 +95,7 @@ export class GameSession {
     this.checkpointFlag = this.sceneState.checkpointFlag;
     this.goalObject = this.sceneState.goalObject;
     this.bossState = this.sceneState.bossState;
+    if (this.bossState) this.bossState.fight = createBossFight(level.boss);
     this.randomState = this.sceneState.randomState;
     this.sun = this.sceneState.sun;
 
@@ -115,6 +118,15 @@ export class GameSession {
 
     this.buildPlayer();
     this.fx = new SessionFx({ THREE, session: this });
+    this.bossPresenter = this.bossState
+      ? new BossPresenter({
+        THREE,
+        scene: this.scene,
+        visual: this.bossState,
+        pool: this.fx.pool,
+        shake: this.fx.shake,
+      })
+      : null;
     this.attachInput();
 
     this.onResize = () => {
@@ -326,9 +338,15 @@ export class GameSession {
     this.updateShadow();
     if (this.glow.visible) this.glow.position.copy(player.pos).y += 0.9;
     this.updateCamera(seconds);
-    this.fx.update(fxSeconds);
+    // The boss presenter's slow-mo only scales presentation time. The fixed
+    // step above keeps simulating at full speed, same as the co-op server.
+    const fxScale = this.bossPresenter?.timeScale ?? 1;
+    this.bossPresenter?.update(fxSeconds, this.bossState?.fight);
+    this.fx.update(fxSeconds * fxScale);
     this.fx.beginRender(this.renderer);
+    this.bossPresenter?.applyCamera(this.camera);
     this.renderer.render(this.scene, this.camera);
+    this.bossPresenter?.restoreCamera(this.camera);
     this.fx.endRender();
     player.pos.copy(simulated);
   }
@@ -621,6 +639,7 @@ export class GameSession {
     this.raf = 0;
     removeEventListener('resize', this.onResize);
     this.detachInput();
+    this.bossPresenter?.dispose();
     this.fx.dispose();
     this.sceneState.dispose();
     for (const child of [...this.scene.children]) this.disposeObject(child);

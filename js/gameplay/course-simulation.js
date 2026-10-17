@@ -1,4 +1,5 @@
 import { AABB } from '../core/aabb.js';
+import { createBossFight, stepBossFight } from './boss-fight.js';
 import { coursePlayerWorld, createCourseWorld, moverPositionAt } from './course-world.js';
 import { applyPlayerInput, createPlayerState } from './player-state.js';
 import { nextSeededRandom, seedToUint32 } from './seeded-random.js';
@@ -91,23 +92,7 @@ export function createCourseSimulation({ level, seed, players }) {
     dead: false,
     ...enemyDimensions(enemy.t),
   }));
-  if (level.boss) {
-    state.boss = {
-      positionX: level.boss.p[0],
-      positionY: level.boss.p[1],
-      positionZ: level.boss.p[2],
-      home: [...level.boss.p],
-      hp: level.boss.hp,
-      maxHp: level.boss.hp,
-      arena: [...level.boss.arena],
-      mode: 'sleep',
-      timer: 0,
-      chargeDirection: 1,
-      speed: 9,
-      awake: false,
-      targetPlayerId: null,
-    };
-  }
+  if (level.boss) state.boss = createBossFight(level.boss);
   return state;
 }
 
@@ -186,7 +171,8 @@ function stepFixed(state, inputsByPlayer, seconds, acceptJumpPress) {
   }
   updateCollectibles(state);
   updateCourseLandmarks(state);
-  updateBossDecision(state, seconds);
+  updateBoss(state, seconds);
+  if (state.phase !== 'playing') return;
 
   for (const enemy of state.enemies) {
     if (enemy.dead) continue;
@@ -256,43 +242,43 @@ function enemyVisualY(enemy) {
     : enemy.positionY + enemy.size * 0.35;
 }
 
-function updateBossDecision(state, seconds) {
-  const boss = state.boss;
-  if (!boss) return;
-  const target = nearestActivePlayer(state, boss.positionX, boss.positionY);
-  if (!boss.awake) {
-    if (target && Math.abs(target.positionX - boss.positionX) < 18) {
-      boss.awake = true;
-      boss.mode = 'idle';
-      boss.timer = 1.2;
+// The fight rules live in boss-fight.js so solo runs the same code. This
+// adapter only maps chefs to fighters and applies the contacts it returns.
+function updateBoss(state, seconds) {
+  const fight = state.boss;
+  if (!fight) return;
+  const players = Object.values(state.players)
+    .filter((player) => player.active && !player.safe)
+    .sort((left, right) => left.playerId.localeCompare(right.playerId));
+  const fighters = players.map((player) => ({
+    id: player.playerId,
+    x: player.positionX,
+    y: player.positionY,
+    vy: player.velocityY,
+    width: player.width,
+    height: player.height,
+    shielded: player.power?.type === 'shield',
+    invulnerable: player.invulnerabilitySeconds > 0,
+  }));
+  const contacts = stepBossFight(fight, fighters, seconds, () => nextSeededRandom(state));
+  for (const contact of contacts) {
+    const player = state.players[contact.id];
+    if (!player) continue;
+    if (contact.kind === 'hurt') {
+      const lives = player.lives;
+      if (!damagePlayer(state, player)) continue;
+      if (state.phase !== 'playing') return;
+      if (player.lives === lives) {
+        player.velocityX = contact.knockbackX;
+        player.velocityY = contact.velocityY;
+        player.grounded = false;
+      }
+    } else {
+      player.velocityY = contact.velocityY;
+      player.grounded = false;
     }
-    return;
   }
-
-  boss.timer -= seconds;
-  if (boss.mode === 'idle' && boss.timer <= 0) {
-    const nextTarget = nearestActivePlayer(state, boss.positionX, boss.positionY);
-    boss.targetPlayerId = nextTarget?.playerId ?? null;
-    boss.chargeDirection = Math.sign(
-      (nextTarget?.positionX ?? boss.positionX + 1) - boss.positionX,
-    ) || 1;
-    boss.mode = 'telegraph';
-    boss.timer = 0.7;
-  } else if (boss.mode === 'telegraph' && boss.timer <= 0) {
-    boss.mode = 'charge';
-    boss.timer = 1.8;
-  } else if (boss.mode === 'charge') {
-    boss.positionX += boss.chargeDirection * boss.speed * seconds;
-    const [arenaX, , , arenaWidth] = boss.arena;
-    if (Math.abs(boss.positionX - arenaX) > arenaWidth / 2 - 3 || boss.timer <= 0) {
-      boss.mode = 'tired';
-      boss.timer = 2.4;
-    }
-  } else if (boss.mode === 'tired' && boss.timer <= 0) {
-    boss.mode = 'idle';
-    boss.timer = 1 + nextSeededRandom(state);
-    boss.targetPlayerId = null;
-  }
+  if (fight.mode === 'done') completeCourse(state);
 }
 
 function nearestActivePlayer(state, positionX, positionY) {
@@ -419,19 +405,24 @@ function updateCourseLandmarks(state) {
 
   const players = Object.values(state.players);
   if (state.goal && players.length > 0 && players.every((player) => player.reachedGoal)) {
-    state.phase = 'completed';
-    state.completion = {
-      levelId: state.level.id,
-      tomatoCount: state.tomatoCount,
-      totalTomatoes: (state.level.coins ?? []).length,
-      elapsed: state.elapsed,
-      players: Object.fromEntries(players.map((player) => [player.playerId, {
-        hearts: player.hearts,
-        lives: player.lives,
-      }])),
-    };
-    state.completion.stars = calculateCoopStars(state.completion);
+    completeCourse(state);
   }
+}
+
+function completeCourse(state) {
+  const players = Object.values(state.players);
+  state.phase = 'completed';
+  state.completion = {
+    levelId: state.level.id,
+    tomatoCount: state.tomatoCount,
+    totalTomatoes: (state.level.coins ?? []).length,
+    elapsed: state.elapsed,
+    players: Object.fromEntries(players.map((player) => [player.playerId, {
+      hearts: player.hearts,
+      lives: player.lives,
+    }])),
+  };
+  state.completion.stars = calculateCoopStars(state.completion);
 }
 
 function updateTimedPower(player, seconds) {

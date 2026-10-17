@@ -29,6 +29,7 @@ import {
   RELEASED_WORLDS,
   buildReleasedLevel,
 } from '../levels/index.js';
+import { createBossCard } from './boss-card.js';
 import { createHudMotion } from './hud-motion.js';
 import { createActiveProgressReporter } from './level-loading.js';
 import { loadSave, writeSave } from './save-store.js';
@@ -56,6 +57,8 @@ let lives = 4;
 let levelStartId = 0;
 let msgTimer = null;
 const hudMotion = createHudMotion();
+const bossCard = createBossCard({ mount: $('hud') });
+const coopBossCard = createBossCard({ mount: $('multiplayer-course-stage'), showBar: true });
 const hasWebGL = createWebGLCapabilityProbe(() => document.createElement('canvas'));
 let localIdentity = getLocalIdentity(localStorage);
 let multiplayerClient = null;
@@ -167,6 +170,9 @@ function onGameEvent(type, data) {
         setTimeout(() => { $('hud-boss').style.display = 'none'; }, 1200);
       }
       break;
+    case 'boss':
+      bossCard.sync(data);
+      break;
     case 'pause':
       if (dispatch({ type: 'PAUSE' })) session?.pause();
       break;
@@ -267,6 +273,7 @@ async function startLevel(index) {
   $('hlp-stars').setAttribute('aria-label', `${stars} of 3 course stars`);
   $('hud-power').style.display = 'none';
   $('hud-boss').style.display = 'none';
+  bossCard.reset();
   dispatch({ type: 'LOAD_READY' });
   hudMsg(level.name, 2600);
   session.start();
@@ -539,6 +546,7 @@ function renderMultiplayerPresentation(presentation) {
   $('multiplayer-tomato-count').textContent = String(lobbyView?.tomatoCount ?? 0);
   $('multiplayer-timer').textContent = formatTime(lobbyView?.timer ?? 0);
   multiplayerCourseRenderer?.render(presentation, lobbyView, performance.now());
+  coopBossCard.sync(lobbyView?.boss ?? null);
 }
 
 async function loadMultiplayerCourse(view) {
@@ -641,6 +649,7 @@ function stopMultiplayerCourse() {
   multiplayerPresentation = null;
   multiplayerCourseRenderer?.destroy();
   multiplayerCourseRenderer = null;
+  coopBossCard.reset();
 }
 
 function handleMultiplayerStatus(status) {

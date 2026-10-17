@@ -649,12 +649,14 @@ test('boss targeting and attack phases are plain deterministic decisions', () =>
   });
   state.players.p2.positionX = 4;
 
-  for (let tick = 0; tick < 75; tick += 1) {
+  // Intro (3.4 s) and the first rest (1.1 s), then the wind-up begins.
+  for (let tick = 0; tick < 280; tick += 1) {
     gameplay.stepCourseSimulation(state, { p1: {}, p2: {} }, 1 / 60);
   }
 
   assert.equal(state.boss.awake, true);
-  assert.equal(state.boss.mode, 'telegraph');
+  assert.equal(state.boss.mode, 'windup');
+  assert.equal(state.boss.attack, 'charge');
   assert.equal(state.boss.targetPlayerId, 'p2');
   assert.equal(state.boss.chargeDirection, -1);
   assert.equal('sprite' in state.boss, false);
@@ -678,7 +680,7 @@ test('a shared completion remains compatible with monotonic campaign saves', () 
 });
 
 test('all released courses simulate and serialize under Node', () => {
-  assert.deepEqual(RELEASED_LEVELS.map(({ id }) => id), ['1-1', '1-2', '2-1', '2-2', '2-3', '3-1', '3-2']);
+  assert.deepEqual(RELEASED_LEVELS.map(({ id }) => id), ['1-1', '1-2', '2-1', '2-2', '2-3', '3-1', '3-2', '3-3']);
   for (const definition of RELEASED_LEVELS) {
     const level = buildReleasedLevel(definition);
     const state = gameplay.createCourseSimulation({

@@ -39,8 +39,8 @@ test('completion rejects unreleased level IDs', () => {
 });
 
 test('completion never unlocks past the last released course', () => {
-  const updated = recordCompletion(createFreshSave(), '3-2', 3, 99);
-  assert.equal(updated.unlocked, 7);
+  const updated = recordCompletion(createFreshSave(), '3-3', 3, 99);
+  assert.equal(updated.unlocked, 8);
 });
 
 test('Taco Territory courses are saveable and floor the unlock count on load', () => {
