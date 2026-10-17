@@ -11,7 +11,8 @@ export const DEFAULT_MOTION = Object.freeze({
   apexSpeedThreshold: 2.4,
   apexGravityMultiplier: 0.5,
   jumpSpeed: 12.5,
-  jumpCutSpeed: 6.5,
+  jumpCutSpeed: 4.2,
+  jumpCutRate: 30,
   coyoteSeconds: 0.12,
   jumpBufferSeconds: 0.13,
   airJumps: 1,
@@ -72,8 +73,13 @@ export function stepPlayerMotion(state, input = {}, world = { solids: [] }, dt, 
     if (hasAirJump) next.airJumpsRemaining -= 1;
   }
 
+  // Releasing jump early eases the rise toward the cut speed over a few
+  // frames instead of chopping it in one. A rate of 0 keeps the hard clamp.
   if (input.jumpHeld === false && next.velocityY > motion.jumpCutSpeed) {
-    next.velocityY = motion.jumpCutSpeed;
+    next.velocityY = motion.jumpCutRate > 0
+      ? motion.jumpCutSpeed
+        + (next.velocityY - motion.jumpCutSpeed) * Math.exp(-motion.jumpCutRate * seconds)
+      : motion.jumpCutSpeed;
   }
 
   next.velocityY = Math.max(
