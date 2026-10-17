@@ -4,6 +4,7 @@ import { AABB } from './aabb.js';
 import { buildChefSprite, animateChefSprite } from './chef-sprite.js';
 import { CameraFollow } from './camera-follow.js';
 import { FixedStepLoop } from './fixed-step-loop.js';
+import { PositionBlend } from './position-blend.js';
 import { SessionFx } from './session-fx.js';
 import { buildWorldScene } from './world-builder.js';
 import { updateBoss } from '../gameplay/boss.js';
@@ -99,6 +100,7 @@ export class GameSession {
     this.input = new InputState();
     this.previousPos = new THREE.Vector3(...level.spawn);
     this.renderPos = new THREE.Vector3();
+    this.entityBlend = new PositionBlend();
     this.cameraFollow = new CameraFollow();
     this.loop = new FixedStepLoop({ step: 1 / 60, maxSteps: 5 });
     this.projectiles = [];
@@ -228,6 +230,7 @@ export class GameSession {
   simulate(dt) {
     const player = this.player;
     this.previousPos.copy(player.pos);
+    this.entityBlend.remember(this.blendedObjects());
     this.elapsed += dt;
     this.time -= dt;
     if (this.time <= 0) {
@@ -322,6 +325,7 @@ export class GameSession {
         mover.previousPos[2] + (mover.simPos[2] - mover.previousPos[2]) * alpha,
       );
     }
+    this.entityBlend.blend(alpha);
     animateChefSprite(this.rig, player, this.elapsed);
     this.updateShadow();
     if (this.glow.visible) this.glow.position.copy(player.pos).y += 0.9;
@@ -330,7 +334,18 @@ export class GameSession {
     this.fx.beginRender(this.renderer);
     this.renderer.render(this.scene, this.camera);
     this.fx.endRender();
+    this.entityBlend.restore();
     player.pos.copy(simulated);
+  }
+
+  // Everything that steps at 60 Hz and is drawn between steps.
+  blendedObjects() {
+    const objects = [];
+    for (const enemy of this.enemies) if (!enemy.dead) objects.push(enemy.sprite);
+    for (const projectile of this.projectiles) objects.push(projectile.m);
+    const boss = this.bossState;
+    if (boss) objects.push(boss.sprite, boss.ring);
+    return objects;
   }
 
   applyMotion(motion) {
