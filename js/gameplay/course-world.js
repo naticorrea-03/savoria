@@ -1,5 +1,35 @@
 import { AABB } from '../core/aabb.js';
 
+export const COURSE_TICKS_PER_SECOND = 60;
+
+// Platforms are a pure function of elapsed time. The server and every client
+// call this same formula, so a platform never needs to be sent between ticks.
+export function moverPositionAt(platform, elapsedSeconds) {
+  const progress = (
+    Math.sin(
+      ((elapsedSeconds / platform.period) + platform.phase) * Math.PI * 2
+        - Math.PI / 2,
+    ) + 1
+  ) / 2;
+  return [
+    platform.base[0] + platform.to[0] * progress,
+    platform.base[1] + platform.to[1] * progress,
+    platform.base[2] + platform.to[2] * progress,
+  ];
+}
+
+export function poseMover(platform, position) {
+  [platform.positionX, platform.positionY, platform.positionZ] = position;
+  platform.aabb.set(
+    position[0],
+    position[1],
+    position[2],
+    platform.width,
+    platform.height,
+    platform.depth,
+  );
+}
+
 export function createCourseWorld(level = {}) {
   const movingPlatforms = (level.movers ?? []).map((mover, index) => {
     const [x, y, z, width, height, depth] = mover.box;
