@@ -32,17 +32,22 @@ export class InputState {
   }
 
   get axis() {
-    const left = [...LEFT_CODES].some((code) => this.held.has(code));
-    const right = [...RIGHT_CODES].some((code) => this.held.has(code));
-    return Number(right) - Number(left);
+    return Number(this.#anyHeld(RIGHT_CODES)) - Number(this.#anyHeld(LEFT_CODES));
   }
 
   get running() {
-    return [...RUN_CODES].some((code) => this.held.has(code));
+    return this.#anyHeld(RUN_CODES);
   }
 
   get jumpHeld() {
-    return [...JUMP_CODES].some((code) => this.held.has(code));
+    return this.#anyHeld(JUMP_CODES);
+  }
+
+  #anyHeld(codes) {
+    for (const code of codes) {
+      if (this.held.has(code)) return true;
+    }
+    return false;
   }
 
   clear() {

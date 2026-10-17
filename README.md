@@ -29,7 +29,7 @@ Use a desktop browser at least 900 by 620 pixels. Controls: A/D or Left/Right to
 
 Choose **Online Co-op** from the home screen to create a private room or join one with a six-character invite code. Share the resulting private invite link only with the person you want to play with. Rooms are unlisted, accept exactly two browser players, and do not offer public matchmaking or accounts.
 
-The protocol is v1. The server simulates gameplay at 60 Hz and sends state patches at 20 Hz. Each client predicts local movement immediately, renders the other player with 100 ms interpolation, and smooths ordinary authoritative corrections over 65 ms. Respawns, doors, and checkpoints snap immediately.
+The protocol is v1. The server simulates gameplay at 60 Hz and sends state patches at 20 Hz. Each client predicts local movement immediately, renders the other player with 100 ms interpolation, and smooths ordinary authoritative corrections over 65 ms. Respawns, doors, and checkpoints snap immediately. Moving platforms are not sent between ticks. Server and clients compute them from the tick number with `moverPositionAt`, so riders and platforms share one clock.
 
 If a player disconnects, the room pauses. They have 60 seconds to reconnect, then 5 seconds to complete the reconnect handshake. A restart cannot preserve reconnect tokens or active rooms.
 

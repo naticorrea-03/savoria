@@ -1,5 +1,6 @@
 import * as THREE from '../../vendor/three.module.js';
 import { buildChefSprite, animateChefSprite } from '../core/chef-sprite.js';
+import { CameraFollow } from '../core/camera-follow.js';
 import { buildWorldScene } from '../core/world-builder.js';
 
 export class MultiplayerCourseRenderer {
@@ -20,6 +21,7 @@ export class MultiplayerCourseRenderer {
     this.previousRenderAt = null;
     this.minimumFrameMs = minimumFrameMs;
     this.playerVisuals = new Map();
+    this.cameraFollow = new CameraFollow();
     this.projectileVisuals = new Map();
 
     this.renderer = new THREE.WebGLRenderer({ antialias });
@@ -56,12 +58,13 @@ export class MultiplayerCourseRenderer {
       : Math.min(0.05, Math.max(0, (renderedAt - this.previousRenderAt) / 1000));
     this.previousRenderAt = renderedAt;
     this.elapsed += seconds;
+    this.frameSeconds = seconds;
 
     this.syncPlayers(presentation.players);
     this.syncCollectibles(view.collectibles);
     this.syncEnemies(view.enemies);
     this.syncProjectiles(view.projectiles);
-    this.syncMovingPlatforms(view.movingPlatforms);
+    this.syncMovingPlatforms(presentation.movingPlatforms ?? view.movingPlatforms);
     this.syncLandmarks(view);
     this.animateWorld();
     this.updateCamera(presentation.local, seconds);
@@ -141,6 +144,23 @@ export class MultiplayerCourseRenderer {
     };
   }
 
+  // Enemies, shots and the boss only arrive 20 times a second. Easing toward
+  // the newest position hides the stair-step without adding noticeable lag.
+  glide(position, x, y, z) {
+    const seconds = this.frameSeconds ?? 0;
+    const far = Math.abs(position.x - x) + Math.abs(position.y - y) > 4;
+    if (far || position.lengthSq() === 0 || seconds === 0) {
+      position.set(x, y, z);
+      return;
+    }
+    const blend = 1 - Math.exp(-28 * seconds);
+    position.set(
+      position.x + (x - position.x) * blend,
+      position.y + (y - position.y) * blend,
+      z,
+    );
+  }
+
   syncCollectibles(collectibles = []) {
     for (const collectible of collectibles) {
       const index = Number(collectible.id.split('-').at(-1));
@@ -158,7 +178,8 @@ export class MultiplayerCourseRenderer {
       const index = Number(enemy.id.split('-').at(-1));
       const visual = this.sceneState.enemies[index];
       if (!visual) continue;
-      visual.sprite.position.set(
+      this.glide(
+        visual.sprite.position,
         enemy.position.x,
         enemy.position.y + (enemy.type === 'flyer' ? 0 : (visual.size ?? 1.5) * 0.35),
         enemy.position.z,
@@ -172,6 +193,7 @@ export class MultiplayerCourseRenderer {
     for (const projectile of projectiles) {
       activeIds.add(projectile.id);
       let mesh = this.projectileVisuals.get(projectile.id);
+      const isNew = !mesh;
       if (!mesh) {
         mesh = new THREE.Mesh(
           new THREE.SphereGeometry(0.32, 10, 8),
@@ -180,7 +202,11 @@ export class MultiplayerCourseRenderer {
         this.scene.add(mesh);
         this.projectileVisuals.set(projectile.id, mesh);
       }
-      mesh.position.set(projectile.position.x, projectile.position.y, projectile.position.z);
+      if (isNew) {
+        mesh.position.set(projectile.position.x, projectile.position.y, projectile.position.z);
+      } else {
+        this.glide(mesh.position, projectile.position.x, projectile.position.y, projectile.position.z);
+      }
     }
     for (const [projectileId, mesh] of this.projectileVisuals) {
       if (activeIds.has(projectileId)) continue;
@@ -209,7 +235,7 @@ export class MultiplayerCourseRenderer {
     }
     if (this.sceneState.bossState && view.boss) {
       const boss = this.sceneState.bossState;
-      boss.sprite.position.set(view.boss.position.x, view.boss.position.y, view.boss.position.z);
+      this.glide(boss.sprite.position, view.boss.position.x, view.boss.position.y, view.boss.position.z);
       boss.sprite.visible = view.boss.hp > 0;
       boss.ring.position.copy(boss.sprite.position);
       boss.ring.visible = view.boss.awake && view.boss.hp > 0;
@@ -236,12 +262,19 @@ export class MultiplayerCourseRenderer {
 
   updateCamera(local, seconds) {
     if (!local) return;
-    const facing = Math.sign(local.velocity?.x || 1);
     const levelLength = this.level.length || 100;
-    const cameraX = Math.max(9, Math.min(levelLength - 9, local.position.x + facing * 2.5));
-    const cameraY = Math.max(3.5, local.position.y + 4);
-    const alpha = seconds > 0 ? Math.min(1, seconds * 8) : 1;
-    this.camera.position.lerp(new THREE.Vector3(cameraX, cameraY, 21), alpha);
+    const motion = local.position;
+    this.cameraFollow.update({
+      x: motion.x,
+      y: motion.y,
+      velocityX: motion.velocityX ?? local.velocity?.x ?? 0,
+      facing: motion.facing ?? 1,
+      grounded: motion.grounded ?? local.grounded ?? true,
+      dt: seconds,
+      minX: 9,
+      maxX: levelLength - 9,
+    });
+    this.camera.position.set(this.cameraFollow.x, this.cameraFollow.y, 21);
     this.camera.lookAt(this.camera.position.x, this.camera.position.y - 1.8, 0);
     this.sceneState.updateBackground?.(this.camera.position.x, this.camera.position.y);
     this.sceneState.sun.position.set(
