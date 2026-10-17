@@ -103,12 +103,13 @@ Start with [the contribution guide](./CONTRIBUTING.md). It includes a copyable C
 
 ## Project status
 
-Released game content includes two complete worlds:
+Released game content includes three worlds:
 
 - World 1, Pasta Plains: **1-1 Farfalle Fields** and **1-2 Penne Ridge**
-- World 2, Sushi Shores: **2-1 Nori Narrows** and **2-2 Wasabi Falls**
+- World 2, Sushi Shores: **2-1 Nori Narrows**, **2-2 Wasabi Falls**, and **2-3 Sashimi Summit**
+- World 3, Taco Territory: **3-1 Tortilla Trail** and **3-2 Habanero Heights**
 
-Worlds 3 through 6 live in `js/experimental/`. They are hidden experimental data. They are not part of the released game, public map, or progression.
+Taco Territory uses the shared fallback art for now. Worlds 4 through 6 live in `js/experimental/`. They are hidden experimental data. They are not part of the released game, public map, or progression.
 
 The public repository includes the hosted Render Blueprint and provider-neutral Docker setup.
 

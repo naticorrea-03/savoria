@@ -1,5 +1,6 @@
 import { WORLD_ONE_VISUALS } from '../visuals/world-one-manifest.js';
 import { WORLD_TWO_VISUALS } from '../visuals/world-two-manifest.js';
+import { WORLD_THREE_VISUALS } from '../visuals/world-three-manifest.js';
 
 export const THEMES = {
   pasta: {
@@ -23,6 +24,7 @@ export const THEMES = {
     skyline: ['pagoda', 'archgate', 'sakura', 'bamboo'],
   },
   taco: {
+    visuals: WORLD_THREE_VISUALS,
     tint: 0xffb888, hazardTint: 0xff9070, melt: 0xe8a018,
     bg: 'assets/sprites/bg3.jpg',
     skyTop: 0x5a1c4e, skyBottom: 0xff8f3d, fog: 0xe8703a, fogFar: 140,

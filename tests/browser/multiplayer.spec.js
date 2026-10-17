@@ -414,7 +414,7 @@ test('two browser contexts enter every released course through the production lo
   await host.addInitScript(() => {
     localStorage.setItem('savoria3d-save-v4', JSON.stringify({
       version: 4,
-      unlocked: 4,
+      unlocked: 7,
       best: { '1-1': 3, '1-2': 3, '2-1': 3 },
       chef: 'fatsio',
       sound: false,
@@ -422,7 +422,7 @@ test('two browser contexts enter every released course through the production lo
   });
 
   try {
-    for (const levelId of ['1-1', '1-2', '2-1', '2-2']) {
+    for (const levelId of ['1-1', '1-2', '2-1', '2-2', '2-3', '3-1', '3-2']) {
       await host.goto(`${ONLINE_ORIGIN}/play/`);
       await host.getByRole('button', { name: 'Online Co-op' }).click();
       await host.getByRole('button', { name: 'Create room' }).click();

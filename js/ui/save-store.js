@@ -1,7 +1,9 @@
+import { RELEASED_LEVELS } from '../levels/index.js';
+
 export const SAVE_KEY = 'savoria3d-save-v4';
 const LEGACY_KEYS = ['savoria3d-save-v3', 'savoria3d-save-v2'];
-const MAX_RELEASED_LEVELS = 4;
-const RELEASED_LEVEL_IDS = new Set(['1-1', '1-2', '2-1', '2-2']);
+const MAX_RELEASED_LEVELS = RELEASED_LEVELS.length;
+const RELEASED_LEVEL_IDS = new Set(RELEASED_LEVELS.map(({ id }) => id));
 
 export const createFreshSave = () => ({ version: 4, unlocked: 1, best: {}, chef: 'fatsio', sound: true });
 
@@ -11,13 +13,11 @@ export function parseSave(raw) {
     const value = JSON.parse(raw);
     const save = createFreshSave();
     save.best = Object.fromEntries(Object.entries(value.best ?? {}).filter(([id, stars]) => RELEASED_LEVEL_IDS.has(id) && Number.isInteger(stars) && stars >= 0 && stars <= 3));
-    const progressFloor = save.best['2-1'] !== undefined
-      ? 4
-      : save.best['1-2'] !== undefined
-        ? 3
-        : save.best['1-1'] !== undefined
-          ? 2
-          : 1;
+    // Completing course N unlocks course N + 1.
+    const progressFloor = RELEASED_LEVELS.reduce(
+      (floor, { id }, index) => (save.best[id] !== undefined ? index + 2 : floor),
+      1,
+    );
     save.unlocked = Math.min(
       MAX_RELEASED_LEVELS,
       Math.max(progressFloor, Number(value.unlocked) || 1),
