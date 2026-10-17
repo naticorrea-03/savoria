@@ -111,9 +111,11 @@ export class MultiplayerRunLoop {
       const snapReason = local.snapRevision > this.localSnapRevision
         ? local.snapReason
         : undefined;
+      const fromTick = this.renderTick();
+      const riding = this.localPrediction.predicted.groundMoverId;
       this.localPrediction.reconcile(predictionState(local, view.authoritativeTick), local.acceptedInputCount, snapReason
         ? { now: receivedAt, reason: snapReason }
-        : { now: receivedAt });
+        : { now: receivedAt, carry: (replayed) => this.groundCarry(riding, replayed, fromTick) });
       this.localSnapRevision = Math.max(this.localSnapRevision, local.snapRevision);
     }
 
@@ -234,8 +236,25 @@ export class MultiplayerRunLoop {
   renderTick() {
     const predicted = this.localPrediction?.predicted;
     if (!predicted || !this.authorityPlaying) return this.lastView?.authoritativeTick ?? 0;
+    // The chef is drawn between the previous and the newest predicted state,
+    // so the clock blends the same two ticks. Right after a reconcile with no
+    // pending input both are the same state and the clock must not lag.
     const tick = Number(predicted.tick) || 0;
-    return tick - 1 + this.localPrediction.renderAlpha;
+    const previous = Number(this.localPrediction.previous?.tick ?? tick - 1) || 0;
+    return previous + (tick - previous) * this.localPrediction.renderAlpha;
+  }
+
+  // A patch can move the predicted tick, and with it every platform, by a
+  // step or two. The rider's own correction must include the same shift or
+  // the chef visibly slides on the platform for one correction window.
+  groundCarry(moverId, replayed, fromTick) {
+    if (!moverId || replayed.groundMoverId !== moverId) return null;
+    const platform = this.predictionWorld.movingPlatforms.find(({ id }) => id === moverId);
+    if (!platform) return null;
+    const toTick = this.renderTick();
+    const before = moverPositionAt(platform, fromTick / COURSE_TICKS_PER_SECOND);
+    const after = moverPositionAt(platform, toTick / COURSE_TICKS_PER_SECOND);
+    return { x: after[0] - before[0], y: after[1] - before[1] };
   }
 
   // Remote players are drawn about 100 ms in the past, but the platform they

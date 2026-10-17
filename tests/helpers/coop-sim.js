@@ -56,7 +56,18 @@ export function runCoopSession({
   frameHz = 60,
   startOnMover = null,
   script = () => ({}),
+  // Real rooms are uneven: patches arrive late or bunched and frames hitch.
+  // patchJitterMs adds 0..n ms to each patch, hitchEveryMs drops a frame
+  // budget of hitchMs now and then. Both use a fixed seed.
+  patchJitterMs = 0,
+  hitchEveryMs = 0,
+  hitchMs = 45,
 }) {
+  let seed = 0x2f6e2b1;
+  const random = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 2 ** 32;
+  };
   const localId = 'local';
   const server = createCourseSimulation({
     level,
@@ -101,7 +112,10 @@ export function runCoopSession({
 
   const publishPatch = () => {
     const snapshot = createCourseSnapshot(server);
-    toClient.push({ at: clock + latencyMs, view: toView(snapshot, localId, { ...accepted }), snapshot });
+    const at = clock + latencyMs + random() * patchJitterMs;
+    // Keep delivery in order, the way one WebSocket does.
+    const last = toClient.at(-1)?.at ?? 0;
+    toClient.push({ at: Math.max(at, last), view: toView(snapshot, localId, { ...accepted }), snapshot });
   };
   publishPatch();
 
@@ -136,6 +150,7 @@ export function runCoopSession({
     }
     if (clock >= nextFrame) {
       nextFrame += frameMs;
+      if (hitchEveryMs > 0 && random() < frameMs / hitchEveryMs) nextFrame += hitchMs;
       const held = script(clock);
       for (const code of ['ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft']) runLoop.release(code);
       if (held.axis < 0) runLoop.press('ArrowLeft');

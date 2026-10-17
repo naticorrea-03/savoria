@@ -54,12 +54,36 @@ for (const latencyMs of [30, 80, 140]) {
       const { local, remote } = riderOffsets(result);
       // The platform travels 3.5 units. Before the fix the offset swung by
       // 0.4 (remote) and 0.5 to 0.9 (local) units, about a chef width.
-      assert.ok(swing(local) < 0.15, `local rider drifted ${swing(local).toFixed(3)}`);
-      assert.ok(swing(remote) < 0.05, `remote rider drifted ${swing(remote).toFixed(3)}`);
+      assert.ok(swing(local) < 0.02, `local rider drifted ${swing(local).toFixed(3)}`);
+      assert.ok(swing(remote) < 0.02, `remote rider drifted ${swing(remote).toFixed(3)}`);
       const server = result.server.players.local;
       assert.equal(server.grounded, true);
       const corrections = result.corrections;
       assert.ok(Math.max(...corrections) < 0.1, 'authority never pulls the rider far');
+    });
+  }
+}
+
+// Real rooms deliver patches unevenly and frames hitch. A late or bunched
+// patch moves the predicted tick, and every platform with it, by a step or
+// two. Measured in two real browsers this slid the local chef about 0.1 units
+// on mover-1. The correction now moves with the ground under the rider.
+for (const latencyMs of [30, 80, 140]) {
+  for (const frameHz of [60, 144]) {
+    test(`local rider stays glued through uneven patches at ${latencyMs} ms and ${frameHz} Hz`, () => {
+      const result = runCoopSession({
+        level,
+        seconds: 12,
+        latencyMs,
+        frameHz,
+        startOnMover: FLOATING,
+        patchJitterMs: 40,
+        hitchEveryMs: 700,
+      });
+      const { local, remote } = riderOffsets(result);
+      assert.ok(swing(local) < 0.02, `local rider drifted ${swing(local).toFixed(3)}`);
+      assert.ok(swing(remote) < 0.02, `remote rider drifted ${swing(remote).toFixed(3)}`);
+      assert.equal(result.server.players.local.grounded, true);
     });
   }
 }

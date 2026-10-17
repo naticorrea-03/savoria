@@ -111,9 +111,13 @@ export class LocalPrediction {
     return this.sample(now);
   }
 
+  // carry: how far the ground under the rider moved between the old and the
+  // new render tick. Folding it into the correction keeps a rider glued to a
+  // moving platform when a patch shifts the predicted tick by a step or two.
   reconcile(authoritative, acknowledgedSequence, {
     now,
     reason = 'authority',
+    carry = null,
   } = {}) {
     if (SNAP_REASONS.has(reason)) {
       this.reset(authoritative);
@@ -130,21 +134,29 @@ export class LocalPrediction {
     }
     this.predicted = replayed;
     this.previous = previous;
+    const carried = typeof carry === 'function' ? carry(this.predicted) : carry;
+    // Measure the correction against what will actually be drawn next, the
+    // blend of the two newest states, not the newest state alone.
+    const drawn = this.base();
     this.correction = {
       offset: {
-        x: visible.x - replayed.x,
-        y: visible.y - replayed.y,
-        z: visible.z - replayed.z,
+        x: visible.x - drawn.x + (carried?.x ?? 0),
+        y: visible.y - drawn.y + (carried?.y ?? 0),
+        z: visible.z - drawn.z,
       },
       startedAt: now,
     };
     return copyPosition(visible);
   }
 
-  sample(now) {
-    const base = this.renderAlpha < 1
+  base() {
+    return this.renderAlpha < 1
       ? { ...this.predicted, ...lerpPosition(this.previous, this.predicted, this.renderAlpha) }
       : this.predicted;
+  }
+
+  sample(now) {
+    const base = this.base();
     if (!this.correction) return copyPosition(base);
     const progress = Math.max(0, Math.min(1, (now - this.correction.startedAt) / this.correctionMs));
     if (progress >= 1) {
