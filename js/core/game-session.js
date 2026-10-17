@@ -4,6 +4,7 @@ import { AABB } from './aabb.js';
 import { buildChefSprite, animateChefSprite } from './chef-sprite.js';
 import { CameraFollow } from './camera-follow.js';
 import { FixedStepLoop } from './fixed-step-loop.js';
+import { SessionFx } from './session-fx.js';
 import { buildWorldScene } from './world-builder.js';
 import { updateBoss } from '../gameplay/boss.js';
 import { updateEntities } from '../gameplay/entities.js';
@@ -113,6 +114,7 @@ export class GameSession {
     this.shownTutorials = new Set();
 
     this.buildPlayer();
+    this.fx = new SessionFx({ THREE, session: this });
     this.attachInput();
 
     this.onResize = () => {
@@ -200,12 +202,14 @@ export class GameSession {
     if (this.destroyed) return;
     const seconds = Math.min(0.1, (now - this.previousFrame) / 1000);
     this.previousFrame = now;
+    // Effects keep playing after a finish (confetti) and freeze while paused.
+    const fxSeconds = this.running || this.finished ? seconds : 0;
     this.loop.advance(
       seconds,
       (dt) => {
         if (this.running && !this.finished) this.simulate(dt);
       },
-      (alpha) => this.renderFrame(alpha, seconds),
+      (alpha) => this.renderFrame(alpha, seconds, fxSeconds),
     );
     this.raf = requestAnimationFrame(this.frame);
   };
@@ -303,7 +307,7 @@ export class GameSession {
   // Drawing happens every display frame, between two fixed 60 Hz steps. The
   // player, platforms and camera are blended by alpha so motion stays smooth
   // at 120 or 144 Hz and never advances faster than the simulation.
-  renderFrame(alpha, seconds) {
+  renderFrame(alpha, seconds, fxSeconds = seconds) {
     const player = this.player;
     const simulated = this.renderPos.copy(player.pos);
     const teleported = this.previousPos.distanceToSquared(simulated) > 9;
@@ -322,8 +326,11 @@ export class GameSession {
     this.updateShadow();
     if (this.glow.visible) this.glow.position.copy(player.pos).y += 0.9;
     this.updateCamera(seconds);
-    player.pos.copy(simulated);
+    this.fx.update(fxSeconds);
+    this.fx.beginRender(this.renderer);
     this.renderer.render(this.scene, this.camera);
+    this.fx.endRender();
+    player.pos.copy(simulated);
   }
 
   applyMotion(motion) {
@@ -476,25 +483,8 @@ export class GameSession {
   }
 
   burst(position, color, count = 10, spread = 4) {
-    for (let index = 0; index < count; index += 1) {
-      const mesh = new THREE.Mesh(
-        new THREE.CircleGeometry(0.11, 8),
-        new THREE.MeshBasicMaterial({
-          color,
-          transparent: true,
-          opacity: 0.72,
-          side: THREE.DoubleSide,
-        }),
-      );
-      mesh.position.copy(position);
-      const velocity = new THREE.Vector3(
-        (Math.random() - 0.5) * spread,
-        Math.random() * spread * 0.9 + 1,
-        (Math.random() - 0.5) * spread,
-      );
-      this.scene.add(mesh);
-      this.particles.push({ m: mesh, v: velocity, life: 0.7 });
-    }
+    // Pooled, presentation-only particles. Never touches gameplay state.
+    this.fx.burst(position, color, count, spread);
   }
 
   hurt(fromPosition) {
@@ -560,6 +550,7 @@ export class GameSession {
   complete(isBoss = false) {
     if (this.finished || this.destroyed) return;
     this.finished = true;
+    this.fx.celebrate();
     sfx.goal();
     this.emit('complete', {
       coins: this.coinsGot,
@@ -630,6 +621,7 @@ export class GameSession {
     this.raf = 0;
     removeEventListener('resize', this.onResize);
     this.detachInput();
+    this.fx.dispose();
     this.sceneState.dispose();
     for (const child of [...this.scene.children]) this.disposeObject(child);
     this.textures.dispose();
