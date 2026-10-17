@@ -39,7 +39,7 @@ test('title hub reports real save progress and the next playable course', () => 
     currentLevelName: 'Wasabi Falls',
     currentWorld: 2,
     totalStars: 6,
-    worldStars: { 1: 5, 2: 1 },
+    worldStars: { 1: 5, 2: 1, 3: 0 },
   });
 });
 
@@ -103,21 +103,21 @@ test('finishing 1-2 completes World 1 and unlocks Sushi Shores', () => {
   assert.equal(next.save.best['1-2'], 3);
 });
 
-test('finishing 2-2 enters the Sushi Shores completion state', () => {
+test('finishing 2-3 enters the Sushi Shores completion state', () => {
   const state = initialUiState({
-    save: { ...initialUiState().save, unlocked: 4 },
+    save: { ...initialUiState().save, unlocked: 5 },
   });
   const next = reduceUiState(state, {
     type: 'COURSE_COMPLETE',
-    levelId: '2-2',
+    levelId: '2-3',
     stars: 3,
     stats: { coins: 12, totalCoins: 12, time: 96 },
   });
   assert.equal(next.screen, 'complete');
   assert.equal(next.completion.worldComplete, true);
   assert.equal(next.completion.worldNumber, 2);
-  assert.equal(next.save.unlocked, 4);
-  assert.equal(next.save.best['2-2'], 3);
+  assert.equal(next.save.unlocked, 6);
+  assert.equal(next.save.best['2-3'], 3);
 });
 
 test('asset failure enters a retryable error state', () => {

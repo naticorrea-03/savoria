@@ -33,14 +33,20 @@ test('World 1 completion can unlock Sushi Shores', () => {
 
 test('completion rejects unreleased level IDs', () => {
   const original = createFreshSave();
-  const updated = recordCompletion(original, '3-1', 3, 5);
+  const updated = recordCompletion(original, '4-1', 3, 8);
   assert.deepEqual(updated, original);
   assert.notEqual(updated, original);
 });
 
-test('completion never unlocks past Sushi Shores', () => {
-  const updated = recordCompletion(createFreshSave(), '2-2', 3, 9);
-  assert.equal(updated.unlocked, 4);
+test('completion never unlocks past the last released course', () => {
+  const updated = recordCompletion(createFreshSave(), '3-2', 3, 99);
+  assert.equal(updated.unlocked, 7);
+});
+
+test('Taco Territory courses are saveable and floor the unlock count on load', () => {
+  const result = parseSave(JSON.stringify({ unlocked: 1, best: { '2-3': 2 } }));
+  assert.equal(result.save.best['2-3'], 2);
+  assert.equal(result.save.unlocked, 6);
 });
 
 test('completion clamps integer star totals to the released range', () => {

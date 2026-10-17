@@ -677,8 +677,8 @@ test('a shared completion remains compatible with monotonic campaign saves', () 
   assert.equal(next.unlocked, 2);
 });
 
-test('all four released courses simulate and serialize under Node', () => {
-  assert.deepEqual(RELEASED_LEVELS.map(({ id }) => id), ['1-1', '1-2', '2-1', '2-2']);
+test('all released courses simulate and serialize under Node', () => {
+  assert.deepEqual(RELEASED_LEVELS.map(({ id }) => id), ['1-1', '1-2', '2-1', '2-2', '2-3', '3-1', '3-2']);
   for (const definition of RELEASED_LEVELS) {
     const level = buildReleasedLevel(definition);
     const state = gameplay.createCourseSimulation({
