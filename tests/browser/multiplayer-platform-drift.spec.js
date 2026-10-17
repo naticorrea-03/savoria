@@ -1,3 +1,4 @@
+import { writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import { expect, test } from '@playwright/test';
 
@@ -127,13 +128,37 @@ function recordDrawnFrames(page, moverId) {
     const mover = renderer.movingSolids[index];
     const draw = renderer.renderer.render.bind(renderer.renderer);
     window.__drawn = [];
+    let lastTick = null;
+    let patchAt = null;
     renderer.renderer.render = (scene, camera) => {
-      const row = { t: performance.now(), platformX: mover.mesh.position.x, platformY: mover.mesh.position.y, chefs: {} };
+      const now = performance.now();
+      const view = multiplayer.view;
+      // A new authoritative tick means a patch arrived since the last frame.
+      if (view.authoritativeTick !== lastTick) {
+        lastTick = view.authoritativeTick;
+        patchAt = now;
+      }
+      const serverPlatform = view.movingPlatforms.find((platform) => platform.id === id)?.position;
+      const presentation = multiplayer.presentation;
+      const row = {
+        t: now,
+        tick: view.authoritativeTick,
+        patchAt,
+        platformX: mover.mesh.position.x,
+        platformY: mover.mesh.position.y,
+        serverPlatformX: serverPlatform?.x,
+        chefs: {},
+      };
       for (const [sessionId, visual] of renderer.playerVisuals) {
-        const server = multiplayer.view.players.find((player) => player.sessionId === sessionId);
+        const server = view.players.find((player) => player.sessionId === sessionId);
+        const shown = presentation?.players.find((player) => player.sessionId === sessionId);
         row.chefs[sessionId] = {
           x: visual.rig.position.x,
           y: visual.rig.position.y,
+          presentedX: shown?.position.x,
+          serverX: server?.position.x,
+          serverY: server?.position.y,
+          local: server?.isLocal === true,
           riding: server?.grounded === true && server?.groundMoverId === id,
         };
       }
@@ -250,7 +275,7 @@ function swingWhileRiding(rows, sessionId) {
 }
 
 for (const oneWayDelayMs of [0, 40]) {
-  test(`both chefs stay glued to the 1-2 floating platform on both screens (${oneWayDelayMs * 2} ms RTT)`, async ({ browser }) => {
+  test(`both chefs stay glued to the 1-2 floating platform on both screens (${oneWayDelayMs * 2} ms RTT)`, async ({ browser }, testInfo) => {
     test.setTimeout(120_000);
     const proxy = await startDelayProxy(oneWayDelayMs);
     const game = await startRoomOnCourseTwo(browser, proxy.origin);
@@ -294,10 +319,18 @@ for (const oneWayDelayMs of [0, 40]) {
           lives: player.lives,
         }));
       }, MOVER_ID);
-      expect(ride.every(({ riding }) => riding), `both chefs rode the whole period: ${JSON.stringify(ride)}`).toBe(true);
 
+      const drawn = {};
       for (const [screen, page] of [['host', game.host], ['guest', game.guest]]) {
-        const rows = await page.evaluate(() => window.__drawn);
+        drawn[screen] = await page.evaluate(() => window.__drawn);
+        // Kept for CI: uploaded as an artifact when the job fails.
+        await writeFile(
+          testInfo.outputPath(`drift-frames-${screen}.json`),
+          JSON.stringify({ ids, ride, rows: drawn[screen] }),
+        );
+      }
+      expect(ride.every(({ riding }) => riding), `both chefs rode the whole period: ${JSON.stringify(ride)}`).toBe(true);
+      for (const [screen, rows] of Object.entries(drawn)) {
         for (const [chef, sessionId] of Object.entries(ids)) {
           const { frames, spanMs, swing } = swingWhileRiding(rows, sessionId);
           // A slow runner draws fewer frames. What matters is samples across
