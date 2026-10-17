@@ -73,7 +73,8 @@ export const WORLD_THREE_VISUALS = deepFreeze({
     meatball: art('bean_walker'),
     shooter: art('habanero_shooter'),
     flyer: art('jalapeno_flyer'),
-    boss: art('molcajete_boss'),
+    // Don Funghi keeps his own look in every world.
+    boss: 'assets/sprites/don_funghi.png',
     tomato: art('tomato'),
     basil: art('cilantro_leaf'),
     speed: art('taquito_speed'),

@@ -17,7 +17,10 @@ test('Taco Territory fills every World 1 slot with dedicated, preloadable art', 
   const assets = collectVisualAssets(visuals);
   assert.equal(assets.length, 22);
   assert.equal(new Set(assets).size, assets.length);
+  // Don Funghi keeps his own sprite in every world.
+  assert.equal(visuals.sprites.boss, 'assets/sprites/don_funghi.png');
   for (const asset of assets) {
+    if (asset === visuals.sprites.boss) continue;
     assert.match(asset, /^assets\/sprites\/w3_.+\.png$/);
     const png = readFileSync(asset);
     assert.equal(png.subarray(1, 4).toString(), 'PNG', asset);
