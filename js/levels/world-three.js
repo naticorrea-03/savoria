@@ -14,6 +14,7 @@ export const WORLD_THREE = {
   cuisine: 'Mexican Cuisine',
   theme: 'taco',
   thumb: 'assets/sprites/world3_thumb.png',
+  mapBackground: 'assets/sprites/w3_world_map.png',
 };
 
 export const WORLD_THREE_LEVELS = [
