@@ -47,3 +47,19 @@ test('a capped frame discards fractional overflow before the next frame', () => 
   loop.advance(0.01, () => simulations++, () => {});
   assert.equal(simulations, 0);
 });
+
+test('render receives the leftover fraction of a step for interpolation', () => {
+  const loop = new FixedStepLoop();
+  const alphas = [];
+  loop.advance(1.5 / 60, () => {}, (alpha) => alphas.push(alpha));
+  loop.advance(0.25 / 60, () => {}, (alpha) => alphas.push(alpha));
+  assert.ok(Math.abs(alphas[0] - 0.5) < 1e-9);
+  assert.ok(Math.abs(alphas[1] - 0.75) < 1e-9);
+});
+
+test('a 144 Hz display advances the simulation at 60 Hz, not faster', () => {
+  const loop = new FixedStepLoop();
+  let simulations = 0;
+  for (let frame = 0; frame < 144; frame += 1) loop.advance(1 / 144, () => simulations++, () => {});
+  assert.ok(Math.abs(simulations - 60) <= 1);
+});

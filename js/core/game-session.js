@@ -2,6 +2,7 @@ import * as THREE from '../../vendor/three.module.js';
 import { sfx } from '../audio/sfx.js';
 import { AABB } from './aabb.js';
 import { buildChefSprite, animateChefSprite } from './chef-sprite.js';
+import { CameraFollow } from './camera-follow.js';
 import { FixedStepLoop } from './fixed-step-loop.js';
 import { SessionFx } from './session-fx.js';
 import { buildWorldScene } from './world-builder.js';
@@ -96,6 +97,9 @@ export class GameSession {
     this.sun = this.sceneState.sun;
 
     this.input = new InputState();
+    this.previousPos = new THREE.Vector3(...level.spawn);
+    this.renderPos = new THREE.Vector3();
+    this.cameraFollow = new CameraFollow();
     this.loop = new FixedStepLoop({ step: 1 / 60, maxSteps: 5 });
     this.projectiles = [];
     this.particles = [];
@@ -205,12 +209,7 @@ export class GameSession {
       (dt) => {
         if (this.running && !this.finished) this.simulate(dt);
       },
-      () => {
-        this.fx.update(fxSeconds);
-        this.fx.beginRender(this.renderer);
-        this.renderer.render(this.scene, this.camera);
-        this.fx.endRender();
-      },
+      (alpha) => this.renderFrame(alpha, seconds, fxSeconds),
     );
     this.raf = requestAnimationFrame(this.frame);
   };
@@ -228,6 +227,7 @@ export class GameSession {
 
   simulate(dt) {
     const player = this.player;
+    this.previousPos.copy(player.pos);
     this.elapsed += dt;
     this.time -= dt;
     if (this.time <= 0) {
@@ -302,9 +302,35 @@ export class GameSession {
 
     updateEntities(this, dt, () => updateBoss(this, dt));
     player.invuln = this.invuln;
+  }
+
+  // Drawing happens every display frame, between two fixed 60 Hz steps. The
+  // player, platforms and camera are blended by alpha so motion stays smooth
+  // at 120 or 144 Hz and never advances faster than the simulation.
+  renderFrame(alpha, seconds, fxSeconds = seconds) {
+    const player = this.player;
+    const simulated = this.renderPos.copy(player.pos);
+    const teleported = this.previousPos.distanceToSquared(simulated) > 9;
+    if (teleported) this.previousPos.copy(simulated);
+    player.pos.lerpVectors(this.previousPos, simulated, teleported ? 1 : alpha);
+    for (const solid of this.solids) {
+      const mover = solid.mover;
+      if (!mover?.simPos) continue;
+      solid.mesh.position.set(
+        mover.previousPos[0] + (mover.simPos[0] - mover.previousPos[0]) * alpha,
+        mover.previousPos[1] + (mover.simPos[1] - mover.previousPos[1]) * alpha,
+        mover.previousPos[2] + (mover.simPos[2] - mover.previousPos[2]) * alpha,
+      );
+    }
     animateChefSprite(this.rig, player, this.elapsed);
     this.updateShadow();
-    this.updateCamera(dt);
+    if (this.glow.visible) this.glow.position.copy(player.pos).y += 0.9;
+    this.updateCamera(seconds);
+    this.fx.update(fxSeconds);
+    this.fx.beginRender(this.renderer);
+    this.renderer.render(this.scene, this.camera);
+    this.fx.endRender();
+    player.pos.copy(simulated);
   }
 
   applyMotion(motion) {
@@ -327,11 +353,14 @@ export class GameSession {
       const nextX = mover.base[0] + mover.to[0] * phase;
       const nextY = mover.base[1] + mover.to[1] * phase;
       const nextZ = mover.base[2] + mover.to[2] * phase;
-      mover.delta = [
-        nextX - solid.mesh.position.x,
-        nextY - solid.mesh.position.y,
-        nextZ - solid.mesh.position.z,
+      const from = mover.simPos ?? [
+        solid.mesh.position.x,
+        solid.mesh.position.y,
+        solid.mesh.position.z,
       ];
+      mover.delta = [nextX - from[0], nextY - from[1], nextZ - from[2]];
+      mover.previousPos = from;
+      mover.simPos = [nextX, nextY, nextZ];
       solid.mesh.position.set(nextX, nextY, nextZ);
       solid.aabb.set(nextX, nextY, nextZ, ...mover.size);
     }
@@ -419,7 +448,13 @@ export class GameSession {
       this.doorCooldown = 1.4;
       sfx.power();
       this.burst(player.pos.clone().setY(player.pos.y + 1), 0xffe9a0, 12, 3);
-      this.camera.position.set(player.pos.x, player.pos.y + 4, 21);
+      this.cameraFollow.snap(
+        player.pos.x,
+        player.pos.y,
+        player.facing,
+        9,
+        (this.level.length || 100) - 9,
+      );
     }
   }
 
@@ -549,13 +584,17 @@ export class GameSession {
   updateCamera(dt) {
     const player = this.player;
     const levelLength = this.level.length || 100;
-    let cameraX = player.pos.x + player.facing * 2.5;
-    cameraX = Math.max(9, Math.min(levelLength - 9, cameraX));
-    const cameraY = Math.max(3.5, player.pos.y + 4);
-    this.camera.position.lerp(
-      new THREE.Vector3(cameraX, cameraY, 21),
-      Math.min(1, dt * 5),
-    );
+    this.cameraFollow.update({
+      x: player.pos.x,
+      y: player.pos.y,
+      velocityX: player.vel.x,
+      facing: player.facing,
+      grounded: player.grounded,
+      dt,
+      minX: 9,
+      maxX: levelLength - 9,
+    });
+    this.camera.position.set(this.cameraFollow.x, this.cameraFollow.y, 21);
     this.camera.lookAt(
       this.camera.position.x,
       this.camera.position.y - 1.8,

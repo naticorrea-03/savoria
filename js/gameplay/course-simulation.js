@@ -1,5 +1,5 @@
 import { AABB } from '../core/aabb.js';
-import { coursePlayerWorld, createCourseWorld } from './course-world.js';
+import { coursePlayerWorld, createCourseWorld, moverPositionAt } from './course-world.js';
 import { applyPlayerInput, createPlayerState } from './player-state.js';
 import { nextSeededRandom, seedToUint32 } from './seeded-random.js';
 
@@ -558,15 +558,7 @@ function updateMovingPlatforms(state) {
       && Math.abs(player.positionY - platform.aabb.maxY) < 0.06
       && player.velocityY <= 0.01
     ));
-    const progress = (
-      Math.sin(
-        ((state.elapsed / platform.period) + platform.phase) * Math.PI * 2
-          - Math.PI / 2,
-      ) + 1
-    ) / 2;
-    const nextX = platform.base[0] + platform.to[0] * progress;
-    const nextY = platform.base[1] + platform.to[1] * progress;
-    const nextZ = platform.base[2] + platform.to[2] * progress;
+    const [nextX, nextY, nextZ] = moverPositionAt(platform, state.elapsed);
     platform.delta = [
       nextX - platform.positionX,
       nextY - platform.positionY,

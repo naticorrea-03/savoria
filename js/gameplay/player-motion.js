@@ -5,7 +5,11 @@ export const DEFAULT_MOTION = Object.freeze({
   runSpeed: 10.6,
   acceleration: 46,
   deceleration: 58,
+  turnAcceleration: 96,
   gravity: 30,
+  fallGravityMultiplier: 1.35,
+  apexSpeedThreshold: 2.4,
+  apexGravityMultiplier: 0.5,
   jumpSpeed: 12.5,
   jumpCutSpeed: 6.5,
   coyoteSeconds: 0.12,
@@ -45,7 +49,10 @@ export function stepPlayerMotion(state, input = {}, world = { solids: [] }, dt, 
   const speed = input.running ? motion.runSpeed : motion.walkSpeed;
 
   next.targetSpeed = axis * speed;
-  next.acceleration = axis === 0 ? motion.deceleration : motion.acceleration;
+  const reversing = axis !== 0 && next.velocityX * axis < 0;
+  next.acceleration = axis === 0
+    ? motion.deceleration
+    : reversing ? motion.turnAcceleration : motion.acceleration;
   next.velocityX = approach(next.velocityX, next.targetSpeed, next.acceleration * seconds);
   if (axis !== 0) next.facing = Math.sign(axis);
 
@@ -69,12 +76,29 @@ export function stepPlayerMotion(state, input = {}, world = { solids: [] }, dt, 
     next.velocityY = motion.jumpCutSpeed;
   }
 
-  next.velocityY = Math.max(-motion.maxFallSpeed, next.velocityY - motion.gravity * seconds);
+  next.velocityY = Math.max(
+    -motion.maxFallSpeed,
+    next.velocityY - gravityFor(next, input, motion) * seconds,
+  );
   resolveMovement(next, world?.solids || [], seconds);
   if (next.grounded) next.airJumpsRemaining = motion.airJumps;
   next.positionZ = 0;
   next.velocityZ = 0;
   return next;
+}
+
+// Rising at full gravity feels right, falling faster makes landings feel
+// decisive, and a lighter pull near the top of a held jump gives a short hang
+// so players can line up a landing.
+function gravityFor(state, input, motion) {
+  if (state.velocityY < 0) return motion.gravity * motion.fallGravityMultiplier;
+  if (
+    input.jumpHeld !== false
+    && state.velocityY < motion.apexSpeedThreshold
+  ) {
+    return motion.gravity * motion.apexGravityMultiplier;
+  }
+  return motion.gravity;
 }
 
 function approach(value, target, maximumDelta) {
