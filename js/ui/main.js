@@ -29,6 +29,7 @@ import {
   RELEASED_WORLDS,
   buildReleasedLevel,
 } from '../levels/index.js';
+import { createHudMotion } from './hud-motion.js';
 import { createActiveProgressReporter } from './level-loading.js';
 import { loadSave, writeSave } from './save-store.js';
 import {
@@ -54,6 +55,7 @@ let session = null;
 let lives = 4;
 let levelStartId = 0;
 let msgTimer = null;
+const hudMotion = createHudMotion();
 const hasWebGL = createWebGLCapabilityProbe(() => document.createElement('canvas'));
 let localIdentity = getLocalIdentity(localStorage);
 let multiplayerClient = null;
@@ -79,20 +81,29 @@ function dispatch(event) {
   if (next.save !== previous.save) writeSave(localStorage, next.save);
   renderUi(next, { previousScreen: previous.screen });
   if (next.screen === 'world') $('map-lives').textContent = String(lives);
+  if (next.screen === 'complete' && previous.screen !== 'complete') {
+    hudMotion.countUp($('complete-stats'));
+  }
   return true;
 }
 
 function renderHearts(count) {
   const hearts = $('hud-hearts');
   const safeCount = Math.max(0, count);
+  const previous = Number(hearts.dataset.count ?? safeCount);
   hearts.textContent = '❤️'.repeat(safeCount) + '🖤'.repeat(Math.max(0, 3 - safeCount));
   hearts.setAttribute('aria-label', `${safeCount} hearts`);
+  hearts.dataset.count = String(safeCount);
+  if (safeCount !== previous) hudMotion.bump(hearts, safeCount < previous ? 0.82 : 1.25);
 }
 
 function hudMsg(text, duration = 2200) {
   const message = $('hud-msg');
   message.textContent = text;
   message.style.opacity = 1;
+  message.classList.remove('is-popping');
+  // Restart the pop animation on the next frame without forcing layout.
+  requestAnimationFrame(() => message.classList.add('is-popping'));
   clearTimeout(msgTimer);
   msgTimer = setTimeout(() => {
     message.style.opacity = 0;
@@ -108,7 +119,7 @@ const POWER_ICONS = {
 function onGameEvent(type, data) {
   switch (type) {
     case 'coins':
-      $('tomato-count').textContent = String(data);
+      hudMotion.setTomatoes(data, { delayMs: hudMotion.flightMs - 120 });
       if (data > 0 && data % 100 === 0) {
         lives += 1;
         hudMsg('Extra chef! +1 life 👨‍🍳');
@@ -117,8 +128,15 @@ function onGameEvent(type, data) {
     case 'hearts':
       renderHearts(data);
       break;
-    case 'timer':
-      $('timer-text').textContent = formatTime(data);
+    case 'timer': {
+      const text = formatTime(data);
+      const timer = $('timer-text');
+      if (timer.textContent !== text) timer.textContent = text;
+      $('hud-timer').classList.toggle('is-low', data > 0 && data <= 30);
+      break;
+    }
+    case 'fx':
+      if (data?.type === 'tomato') hudMotion.flyTomato(data.x, data.y, data.count);
       break;
     case 'msg':
       hudMsg(data);
@@ -235,8 +253,10 @@ async function startLevel(index) {
 
   session?.destroy();
   session = nextSession;
+  delete $('hud-hearts').dataset.count;
   renderHearts(3);
-  $('tomato-count').textContent = '0';
+  hudMotion.resetTomatoes(0);
+  $('hud-timer').classList.remove('is-low');
   $('timer-text').textContent = formatTime(level.time);
   const world = RELEASED_WORLDS.find(({ n }) => n === definition.world);
   $('hlp-world').textContent = world.name.toUpperCase();

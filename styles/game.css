@@ -1961,3 +1961,252 @@ h1.screen-title {
     min-height: 292px;
   }
 }
+
+/* Motion and juice. Presentation only. The reduced-motion block at the end
+   turns all of it off, on top of the global rule in tokens.css. */
+:root {
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+}
+
+/* Screen and overlay transitions */
+.screen:not(.hidden) {
+  animation: fx-screen-in 340ms var(--ease-out) backwards;
+}
+
+.overlay:not(.hidden) {
+  animation: fx-fade-in 220ms ease-out backwards;
+}
+
+.overlay:not(.hidden) .panel {
+  animation: fx-panel-pop 520ms var(--ease-spring) 60ms backwards;
+}
+
+#game-stage:not(.hidden) {
+  animation: fx-fade-in 420ms ease-out backwards;
+}
+
+@keyframes fx-screen-in {
+  from { opacity: 0; transform: translateY(14px) scale(.99); }
+}
+
+@keyframes fx-fade-in {
+  from { opacity: 0; }
+}
+
+@keyframes fx-panel-pop {
+  from { opacity: 0; transform: translateY(26px) scale(.86); }
+}
+
+/* Course-clear card */
+#complete-overlay .panel-kicker {
+  animation: fx-rise 420ms var(--ease-out) 160ms backwards;
+}
+
+#complete-overlay h1 {
+  animation: fx-title-wobble 640ms var(--ease-spring) 220ms backwards;
+}
+
+#complete-overlay .stats {
+  animation: fx-rise 420ms var(--ease-out) 320ms backwards;
+}
+
+#complete-overlay .btn {
+  animation: fx-rise 380ms var(--ease-out) 620ms backwards;
+}
+
+#complete-stars .star {
+  display: inline-block;
+  animation: fx-star-stamp 460ms var(--ease-spring) backwards;
+  animation-delay: calc(420ms + var(--i, 0) * 150ms);
+}
+
+#complete-stars .star.is-earned {
+  filter: drop-shadow(0 0 8px rgb(255 205 70 / 70%));
+}
+
+#complete-stars .star:not(.is-earned) {
+  opacity: .55;
+}
+
+@keyframes fx-rise {
+  from { opacity: 0; transform: translateY(12px); }
+}
+
+@keyframes fx-title-wobble {
+  0% { opacity: 0; transform: scale(.6) rotate(-4deg); }
+  60% { opacity: 1; transform: scale(1.06) rotate(1.5deg); }
+}
+
+@keyframes fx-star-stamp {
+  0% { opacity: 0; transform: scale(2.4) rotate(-22deg); }
+  70% { opacity: 1; transform: scale(.9) rotate(4deg); }
+}
+
+/* Title screen */
+.title-brand img.logo {
+  animation:
+    fx-logo-drop 760ms var(--ease-spring) backwards,
+    fx-logo-float 5.5s ease-in-out 900ms infinite;
+}
+
+.title-progress .title-stat {
+  animation: fx-rise 420ms var(--ease-out) backwards;
+}
+
+.title-progress .title-stat:nth-child(2) { animation-delay: 80ms; }
+.title-progress .title-stat:nth-child(3) { animation-delay: 160ms; }
+
+.title-adventure-card {
+  animation: fx-slide-right 560ms var(--ease-out) 120ms backwards;
+}
+
+.title-chef img {
+  animation:
+    fx-chef-in 620ms var(--ease-spring) backwards,
+    fx-chef-idle 3.2s ease-in-out 700ms infinite;
+  transform-origin: 50% 100%;
+}
+
+.title-chefno img { animation-delay: 220ms, 760ms; }
+.title-fatsio img { animation-delay: 300ms, 1.3s; }
+.title-dinnerette img { animation-delay: 380ms, 1.9s; }
+
+.title-world-card {
+  animation: fx-slide-left 480ms var(--ease-out) backwards;
+}
+
+.title-world-card:nth-of-type(1) { animation-delay: 160ms; }
+.title-world-card:nth-of-type(2) { animation-delay: 220ms; }
+.title-world-card:nth-of-type(3) { animation-delay: 280ms; }
+.title-world-card:nth-of-type(4) { animation-delay: 340ms; }
+.title-world-card:nth-of-type(5) { animation-delay: 400ms; }
+.title-world-card:nth-of-type(6) { animation-delay: 460ms; }
+
+/* Soft steam curling up behind the chefs */
+.title-chef-stage::before,
+.title-chef-stage::after {
+  animation: fx-steam 6s ease-in-out infinite;
+  background: radial-gradient(closest-side, rgb(255 250 235 / 55%), transparent);
+  border-radius: 50%;
+  bottom: 30%;
+  content: "";
+  filter: blur(6px);
+  height: 140px;
+  left: 30%;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  width: 90px;
+  z-index: 0;
+}
+
+.title-chef-stage::after {
+  animation-delay: 3s;
+  left: 62%;
+}
+
+@keyframes fx-logo-drop {
+  0% { opacity: 0; transform: translateY(-40px) scale(.8) rotate(-3deg); }
+  70% { opacity: 1; }
+}
+
+@keyframes fx-logo-float {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  50% { transform: translateY(-5px) rotate(-.6deg); }
+}
+
+@keyframes fx-chef-in {
+  0% { opacity: 0; transform: translateY(40px) scale(.9, 1.1); }
+  70% { opacity: 1; transform: translateY(-6px) scale(1.04, .96); }
+}
+
+@keyframes fx-chef-idle {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  45% { transform: translateY(-7px) scale(.985, 1.02); }
+  55% { transform: translateY(-7px) scale(.985, 1.02); }
+}
+
+@keyframes fx-slide-right {
+  from { opacity: 0; transform: translateX(-28px); }
+}
+
+@keyframes fx-slide-left {
+  from { opacity: 0; transform: translateX(28px); }
+}
+
+@keyframes fx-steam {
+  0% { opacity: 0; transform: translateY(40px) scale(.6, .8); }
+  30% { opacity: .55; }
+  100% { opacity: 0; transform: translateY(-160px) scale(1.3, 1.6) translateX(18px); }
+}
+
+/* HUD */
+#hud-msg.is-popping {
+  animation: fx-msg-pop 380ms var(--ease-spring);
+}
+
+@keyframes fx-msg-pop {
+  0% { transform: translateX(-50%) translateY(10px) scale(.7); }
+  100% { transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+#hud-tomatoes,
+#hud-hearts {
+  transform-origin: 50% 55%;
+}
+
+#hud-timer.is-low {
+  animation: fx-timer-low 1s ease-in-out infinite;
+}
+
+@keyframes fx-timer-low {
+  0%, 100% { border-color: rgb(242 193 78 / 72%); color: var(--parmesan); }
+  50% { border-color: #ff6a4d; color: #ffb3a1; }
+}
+
+.fx-layer {
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  z-index: 11;
+}
+
+.fx-flyer {
+  filter: drop-shadow(0 3px 4px rgb(0 0 0 / 45%));
+  height: 30px;
+  left: -15px;
+  opacity: 0;
+  position: absolute;
+  top: -15px;
+  width: auto;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen:not(.hidden),
+  .overlay:not(.hidden),
+  .overlay:not(.hidden) .panel,
+  #game-stage:not(.hidden),
+  #complete-overlay .panel-kicker,
+  #complete-overlay h1,
+  #complete-overlay .stats,
+  #complete-overlay .btn,
+  #complete-stars .star,
+  .title-brand img.logo,
+  .title-progress .title-stat,
+  .title-adventure-card,
+  .title-chef img,
+  .title-world-card,
+  .title-chef-stage::before,
+  .title-chef-stage::after,
+  #hud-msg.is-popping,
+  #hud-timer.is-low {
+    animation: none;
+  }
+
+  .fx-layer {
+    display: none;
+  }
+}

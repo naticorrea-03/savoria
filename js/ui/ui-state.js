@@ -414,17 +414,33 @@ function renderCompletion(doc, completion) {
       ? `World ${completion.worldNumber} complete!`
       : `${level?.name ?? 'Course'} clear!`;
   }
-  if (stars) {
-    stars.textContent = `${'⭐'.repeat(completion.stars)}${'☆'.repeat(3 - completion.stars)}`;
+  const renderKey = `${completion.levelId}:${completion.stars}:${completion.stats.coins}:${completion.stats.time}`;
+  if (stars && stars.dataset.renderKey !== renderKey) {
+    // One span per star so each can stamp in on its own beat.
+    stars.replaceChildren(...[0, 1, 2].map((index) => {
+      const star = doc.createElement('span');
+      const earned = index < completion.stars;
+      star.className = `star${earned ? ' is-earned' : ''}`;
+      star.style.setProperty('--i', String(index));
+      star.textContent = earned ? '⭐' : '☆';
+      return star;
+    }));
     stars.setAttribute('aria-label', `${completion.stars} of 3 stars`);
+    stars.dataset.renderKey = renderKey;
   }
-  if (stats) {
+  if (stats && stats.dataset.renderKey !== renderKey) {
+    stats.dataset.renderKey = renderKey;
     const tomatoes = completion.stats.totalCoins
       ? `${completion.stats.coins} of ${completion.stats.totalCoins} tomatoes`
       : `${completion.stats.coins ?? 0} tomatoes`;
     stats.replaceChildren();
     const tomatoLine = doc.createElement('div');
-    tomatoLine.textContent = `🍅 ${tomatoes}`;
+    const count = doc.createElement('span');
+    count.dataset.countTo = String(completion.stats.coins ?? 0);
+    count.dataset.countDelay = '420';
+    count.textContent = String(completion.stats.coins ?? 0);
+    const rest = tomatoes.slice(String(completion.stats.coins ?? 0).length);
+    tomatoLine.append('🍅 ', count, rest);
     const timeLine = doc.createElement('div');
     timeLine.textContent = `⏱ ${formatTime(completion.stats.time ?? 0)}`;
     stats.append(tomatoLine, timeLine);
