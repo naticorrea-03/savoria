@@ -19,6 +19,18 @@ const MOVER_TRAVEL = 3.5;
 const PERIOD_MS = 5000;
 const MAX_SWING = 0.03;
 
+// Two pages ride at once but only one can be in front. Keep the other page
+// drawing at full rate instead of the throttled background rate.
+test.use({
+  launchOptions: {
+    args: [
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+    ],
+  },
+});
+
 // Fixed one-way delay on every TCP chunk in both directions. One delay for
 // every chunk keeps the stream in order.
 async function startDelayProxy(delayMs) {
@@ -116,7 +128,7 @@ function recordDrawnFrames(page, moverId) {
     const draw = renderer.renderer.render.bind(renderer.renderer);
     window.__drawn = [];
     renderer.renderer.render = (scene, camera) => {
-      const row = { platformX: mover.mesh.position.x, platformY: mover.mesh.position.y, chefs: {} };
+      const row = { t: performance.now(), platformX: mover.mesh.position.x, platformY: mover.mesh.position.y, chefs: {} };
       for (const [sessionId, visual] of renderer.playerVisuals) {
         const server = multiplayer.view.players.find((player) => player.sessionId === sessionId);
         row.chefs[sessionId] = {
@@ -228,12 +240,11 @@ async function boardWithKeyboard(page, playerId, side) {
 }
 
 function swingWhileRiding(rows, sessionId) {
-  const offsets = rows
-    .map((row) => ({ row, chef: row.chefs[sessionId] }))
-    .filter(({ chef }) => chef?.riding)
-    .map(({ row, chef }) => chef.x - row.platformX);
+  const riding = rows.filter((row) => row.chefs[sessionId]?.riding);
+  const offsets = riding.map((row) => row.chefs[sessionId].x - row.platformX);
   return {
     frames: offsets.length,
+    spanMs: riding.length ? riding.at(-1).t - riding[0].t : 0,
     swing: offsets.length ? Math.max(...offsets) - Math.min(...offsets) : Infinity,
   };
 }
@@ -288,8 +299,11 @@ for (const oneWayDelayMs of [0, 40]) {
       for (const [screen, page] of [['host', game.host], ['guest', game.guest]]) {
         const rows = await page.evaluate(() => window.__drawn);
         for (const [chef, sessionId] of Object.entries(ids)) {
-          const { frames, swing } = swingWhileRiding(rows, sessionId);
-          expect(frames, `${screen} screen drew the ${chef} chef riding`).toBeGreaterThan(30);
+          const { frames, spanMs, swing } = swingWhileRiding(rows, sessionId);
+          // A slow runner draws fewer frames. What matters is samples across
+          // a whole period of the platform.
+          expect(frames, `${screen} screen drew the ${chef} chef riding`).toBeGreaterThanOrEqual(12);
+          expect(spanMs, `${screen} screen covered a full period`).toBeGreaterThanOrEqual(PERIOD_MS);
           expect(swing, `${chef} chef drift on the ${screen} screen`).toBeLessThan(MAX_SWING);
         }
       }
