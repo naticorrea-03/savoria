@@ -56,6 +56,12 @@ let lives = 4;
 let levelStartId = 0;
 let msgTimer = null;
 const hudMotion = createHudMotion();
+const coopHudMotion = createHudMotion({
+  counterId: 'multiplayer-tomato-count',
+  tomatoesId: 'multiplayer-tomatoes',
+  layerParentId: 'online-course-screen',
+});
+let coopTomatoCount = null;
 const hasWebGL = createWebGLCapabilityProbe(() => document.createElement('canvas'));
 let localIdentity = getLocalIdentity(localStorage);
 let multiplayerClient = null;
@@ -536,7 +542,13 @@ function renderMultiplayerPresentation(presentation) {
   for (const [sessionId, marker] of existing) {
     if (!activeIds.has(sessionId)) marker.remove();
   }
-  $('multiplayer-tomato-count').textContent = String(lobbyView?.tomatoCount ?? 0);
+  const tomatoCount = lobbyView?.tomatoCount ?? 0;
+  if (coopTomatoCount === null) {
+    coopHudMotion.resetTomatoes(tomatoCount);
+  } else if (tomatoCount !== coopTomatoCount) {
+    coopHudMotion.setTomatoes(tomatoCount, { delayMs: coopHudMotion.flightMs - 120 });
+  }
+  coopTomatoCount = tomatoCount;
   $('multiplayer-timer').textContent = formatTime(lobbyView?.timer ?? 0);
   multiplayerCourseRenderer?.render(presentation, lobbyView, performance.now());
 }
@@ -583,6 +595,9 @@ async function loadMultiplayerCourse(view) {
     pixelRatio: browserTestRendering ? 1 : Math.min(devicePixelRatio, 2),
     shadows: !browserTestRendering,
     minimumFrameMs: browserTestRendering ? 100 : 0,
+    onFx: (type, data) => {
+      if (type === 'fx' && data?.type === 'tomato') coopHudMotion.flyTomato(data.x, data.y, data.count);
+    },
   });
   $('multiplayer-course-title').textContent = `${definition.id} ${definition.name}`;
   $('multiplayer-course-status').textContent = view.isHost
@@ -641,6 +656,7 @@ function stopMultiplayerCourse() {
   multiplayerPresentation = null;
   multiplayerCourseRenderer?.destroy();
   multiplayerCourseRenderer = null;
+  coopTomatoCount = null;
 }
 
 function handleMultiplayerStatus(status) {
@@ -854,6 +870,7 @@ const multiplayerTestHooks = isBrowserTestMode() ? {
   control(payload) { multiplayerClient?.testControl(payload); },
   drop() { multiplayerClient?.dropForTest(); },
   reconnect() { return multiplayerClient?.reconnectForTest(); },
+  courseRenderer() { return multiplayerCourseRenderer; },
 } : {};
 
 window.__savoriaTest = {

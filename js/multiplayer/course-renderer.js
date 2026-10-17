@@ -2,6 +2,7 @@ import * as THREE from '../../vendor/three.module.js';
 import { buildChefSprite, animateChefSprite } from '../core/chef-sprite.js';
 import { CameraFollow } from '../core/camera-follow.js';
 import { buildWorldScene } from '../core/world-builder.js';
+import { CoopFx } from './coop-fx.js';
 
 export class MultiplayerCourseRenderer {
   constructor({
@@ -12,6 +13,7 @@ export class MultiplayerCourseRenderer {
     pixelRatio = Math.min(devicePixelRatio, 2),
     shadows = true,
     minimumFrameMs = 0,
+    onFx = () => {},
   }) {
     this.container = container;
     this.level = level;
@@ -42,6 +44,15 @@ export class MultiplayerCourseRenderer {
       textures,
     });
     this.movingSolids = this.sceneState.solids.filter(({ mover }) => mover);
+    this.fx = new CoopFx({
+      THREE,
+      scene: this.scene,
+      camera: this.camera,
+      level,
+      sceneState: this.sceneState,
+      emit: (type, data) => onFx(type, data),
+      viewport: () => this.renderer.domElement.getBoundingClientRect(),
+    });
     this.resize();
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
@@ -68,7 +79,11 @@ export class MultiplayerCourseRenderer {
     this.syncLandmarks(view);
     this.animateWorld();
     this.updateCamera(presentation.local, seconds);
+    // Effects freeze with the room. They only read what is drawn.
+    this.fx.update(view.phase === 'paused' ? 0 : seconds, presentation, view, this.playerVisuals);
+    this.fx.beginRender(this.renderer);
     this.renderer.render(this.scene, this.camera);
+    this.fx.endRender();
   }
 
   syncPlayers(players) {
@@ -81,13 +96,16 @@ export class MultiplayerCourseRenderer {
         this.playerVisuals.set(player.sessionId, visual);
       }
       const previousX = visual.player.pos.x;
-      visual.player.pos.set(player.position.x, player.position.y, player.position.z);
+      const position = player.position;
+      visual.player.pos.set(position.x, position.y, position.z);
+      // The local chef is drawn from prediction, so its motion comes from the
+      // predicted state. The remote chef uses the latest server patch.
       visual.player.vel.set(
-        player.velocity?.x ?? (player.position.x - previousX) * 60,
-        player.velocity?.y ?? 0,
-        player.velocity?.z ?? 0,
+        position.velocityX ?? player.velocity?.x ?? (position.x - previousX) * 60,
+        position.velocityY ?? player.velocity?.y ?? 0,
+        position.velocityZ ?? player.velocity?.z ?? 0,
       );
-      visual.player.grounded = player.grounded;
+      visual.player.grounded = position.grounded ?? player.grounded;
       if (Math.abs(visual.player.vel.x) > 0.05) {
         visual.player.facing = Math.sign(visual.player.vel.x);
       }
@@ -168,8 +186,9 @@ export class MultiplayerCourseRenderer {
         ? this.sceneState.coins[index]
         : this.sceneState.items[index];
       if (!visual) continue;
-      visual.sprite.visible = !collectible.takenBy;
-      if (visual.bubble) visual.bubble.visible = !collectible.takenBy;
+      const shown = !collectible.takenBy && !this.fx.hidesCollectible(collectible.id);
+      visual.sprite.visible = shown;
+      if (visual.bubble) visual.bubble.visible = shown;
     }
   }
 
@@ -298,6 +317,7 @@ export class MultiplayerCourseRenderer {
     if (this.destroyed) return;
     this.destroyed = true;
     this.resizeObserver.disconnect();
+    this.fx.dispose();
     this.sceneState.dispose();
     for (const child of [...this.scene.children]) this.disposeVisual(child);
     this.textures.dispose();
