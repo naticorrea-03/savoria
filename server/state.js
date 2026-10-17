@@ -111,6 +111,16 @@ export const CompletionState = schema({
   stars: t.uint8(),
 }, 'SavoriaCompletionState');
 
+export const BossHazardState = schema({
+  id: t.string(),
+  kind: t.string(),
+  state: t.string(),
+  positionX: t.number(),
+  positionY: t.number(),
+  velocityX: t.number(),
+  timer: t.number(),
+}, 'SavoriaBossHazardState');
+
 export const BossState = schema({
   present: t.boolean(),
   positionX: t.number(),
@@ -122,6 +132,17 @@ export const BossState = schema({
   timer: t.number(),
   awake: t.boolean(),
   targetPlayerId: t.string(),
+  phase: t.uint8(),
+  attack: t.string(),
+  duration: t.number(),
+  facing: t.number(),
+  chargeDirection: t.number(),
+  targetX: t.number(),
+  line: t.string(),
+  lineRevision: t.uint16(),
+  hitRevision: t.uint16(),
+  impactRevision: t.uint16(),
+  hazards: t.array(BossHazardState),
 }, 'SavoriaBossState');
 
 export const RoomState = schema({
@@ -371,6 +392,25 @@ function applyBoss(target, boss) {
   target.timer = boss.timer;
   target.awake = boss.awake === true;
   target.targetPlayerId = boss.targetPlayerId ?? '';
+  target.phase = boss.phase ?? 1;
+  target.attack = boss.attack ?? '';
+  target.duration = boss.duration ?? 0;
+  target.facing = boss.facing ?? 0;
+  target.chargeDirection = boss.chargeDirection ?? 0;
+  target.targetX = boss.targetX ?? 0;
+  target.line = boss.line ?? '';
+  target.lineRevision = boss.lineRevision ?? 0;
+  target.hitRevision = boss.hitRevision ?? 0;
+  target.impactRevision = boss.impactRevision ?? 0;
+  replaceCollection(target.hazards, boss.hazards ?? [], BossHazardState, (hazard, value) => {
+    hazard.id = value.id;
+    hazard.kind = value.kind;
+    hazard.state = value.state;
+    hazard.positionX = value.positionX;
+    hazard.positionY = value.positionY;
+    hazard.velocityX = value.velocityX;
+    hazard.timer = value.timer;
+  });
 }
 
 function resetBoss(boss) {
@@ -384,6 +424,17 @@ function resetBoss(boss) {
   boss.timer = 0;
   boss.awake = false;
   boss.targetPlayerId = '';
+  boss.phase = 0;
+  boss.attack = '';
+  boss.duration = 0;
+  boss.facing = 0;
+  boss.chargeDirection = 0;
+  boss.targetX = 0;
+  boss.line = '';
+  boss.lineRevision = 0;
+  boss.hitRevision = 0;
+  boss.impactRevision = 0;
+  boss.hazards.splice(0, boss.hazards.length);
 }
 
 function replaceCollection(collection, values, StateClass, applyValue) {

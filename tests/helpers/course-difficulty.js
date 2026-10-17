@@ -37,7 +37,9 @@ export function difficultyProfile(level) {
     + hazardMovers.length * 3
     + (Number.isFinite(minMoverPeriod) && minMoverPeriod < 4 ? 3 : 0)
     + enemyScore
-    + combos * 2;
+    + combos * 2
+    // A boss is the course's main challenge: two points per hit it takes.
+    + (level.boss ? level.boss.hp * 2 : 0);
 
   return {
     score,

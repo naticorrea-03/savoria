@@ -132,7 +132,7 @@ test('home opens the game directly and shows every planned world', async ({ page
   await expect(page.getByText('Curry Cliffs')).toBeVisible();
   await expect(page.getByText('Dumpling Dynasty')).toBeVisible();
   await expect(page.getByText('Dessert Dome')).toBeVisible();
-  await expect(page.locator('.title-stat').first()).toContainText('0/21');
+  await expect(page.locator('.title-stat').first()).toContainText('0/24');
   await page.getByRole('button', { name: 'Solo Adventure' }).click();
   await expect(page.getByRole('heading', { name: 'Who is cooking?' })).toBeVisible();
   await expect(page.getByText('Every chef shares the same moves. Pick your favorite.')).toBeVisible();
@@ -458,7 +458,7 @@ test('Sushi Shores loads themed art, unlocks 2-2, completes, and resumes', async
   await expectClean(page, diagnostics);
 });
 
-test('Taco Territory loads 3-1 and 3-2 cleanly and 3-2 completes the world', async ({ page }) => {
+test('Taco Territory loads 3-1 and 3-2 cleanly and beating Don Funghi in 3-3 completes the world', async ({ page }) => {
   const diagnostics = await monitorPage(page);
 
   await page.goto('/play/');
@@ -473,7 +473,7 @@ test('Taco Territory loads 3-1 and 3-2 cleanly and 3-2 completes the world', asy
   });
   await page.reload();
   await waitForTitle(page);
-  await expect(page.locator('#title-world-three-stars')).toHaveText('0/6 stars');
+  await expect(page.locator('#title-world-three-stars')).toHaveText('0/9 stars');
   await page.getByRole('button', { name: 'Solo Adventure' }).click();
   await page.getByRole('button', { name: /^Dinnerette/ }).click();
   await openWorld(page, 'Taco Territory');
@@ -496,6 +496,22 @@ test('Taco Territory loads 3-1 and 3-2 cleanly and 3-2 completes the world', asy
     const session = window.__savoriaTest.session;
     session.player.pos.copy(session.goalObject.position);
     session.player.vel.set(0, 0, 0);
+  });
+  await expect(page.getByRole('heading', { name: 'Habanero Heights clear!' })).toBeVisible();
+  await page.getByRole('button', { name: 'World map' }).click();
+
+  await page.getByRole('button', { name: /3-3 Don Funghi's Cantina/ }).click();
+  await expect(page.locator('#hlp-num')).toHaveText('3-3');
+  await page.evaluate(() => {
+    const session = window.__savoriaTest.session;
+    const fight = session.bossState.fight;
+    session.player.pos.set(fight.arena[0] - 12, fight.groundY + 0.5, 0);
+    session.player.vel.set(0, 0, 0);
+  });
+  await expect(page.locator('.boss-card-name').first()).toHaveText('Don Funghi');
+  await expect(page.locator('#hud .boss-card')).toHaveClass(/is-intro/);
+  await page.evaluate(() => {
+    Object.assign(window.__savoriaTest.session.bossState.fight, { hp: 0, mode: 'defeated', timer: 0.3, duration: 0.3 });
   });
   await expect(page.getByRole('heading', { name: 'World 3 complete!' })).toBeVisible();
   await expectClean(page, diagnostics);

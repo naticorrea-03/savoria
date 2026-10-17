@@ -352,6 +352,11 @@ export class SavoriaRoom extends Room {
       snapPlayer(player, this.courseState.hazards[0].position);
     } else if (payload.action === 'goal' && this.courseState.goal) {
       snapPlayer(player, this.courseState.goal.position);
+    } else if (payload.action === 'boss-defeat' && this.courseState.boss) {
+      // Skips to Don Funghi's last stagger so browser tests can finish 3-3.
+      const fight = this.courseState.boss;
+      snapPlayer(player, [fight.arena[0] - 12, fight.groundY, 0]);
+      Object.assign(fight, { awake: true, hp: 0, hazards: [], mode: 'defeated', timer: 0.5, duration: 0.5 });
     } else {
       throw applicationError('Unavailable browser test control');
     }

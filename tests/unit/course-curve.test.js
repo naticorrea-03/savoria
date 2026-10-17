@@ -14,16 +14,16 @@ const GROUND_KINDS = new Set(['ground', 'ground2']);
 const topAt = (level, x) => level.boxes.filter(([cx, , , w]) => x >= cx - w / 2 && x <= cx + w / 2)
   .map(([, cy, , , h]) => cy + h / 2);
 
-test('Taco Territory is a released world with two courses, Sushi Shores has three', () => {
+test('Taco Territory and Sushi Shores are released worlds with three courses each', () => {
   const byWorld = (n) => RELEASED_LEVELS.filter(({ world }) => world === n).map(({ id }) => id);
   assert.deepEqual(byWorld(1), ['1-1', '1-2']);
   assert.deepEqual(byWorld(2), ['2-1', '2-2', '2-3']);
-  assert.deepEqual(byWorld(3), ['3-1', '3-2']);
+  assert.deepEqual(byWorld(3), ['3-1', '3-2', '3-3']);
   const taco = RELEASED_WORLDS.find(({ n }) => n === 3);
   assert.equal(taco.name, 'Taco Territory');
   assert.equal(taco.theme, 'taco');
   assert.deepEqual(RELEASED_LEVELS.slice(4).map(({ name }) => name), [
-    'Sashimi Summit', 'Tortilla Trail', 'Habanero Heights',
+    'Sashimi Summit', 'Tortilla Trail', 'Habanero Heights', "Don Funghi's Cantina",
   ]);
 });
 

@@ -1,4 +1,5 @@
 import * as THREE from '../../vendor/three.module.js';
+import { BossPresenter } from '../core/boss-presenter.js';
 import { buildChefSprite, animateChefSprite } from '../core/chef-sprite.js';
 import { CameraFollow } from '../core/camera-follow.js';
 import { buildWorldScene } from '../core/world-builder.js';
@@ -53,6 +54,9 @@ export class MultiplayerCourseRenderer {
       emit: (type, data) => onFx(type, data),
       viewport: () => this.renderer.domElement.getBoundingClientRect(),
     });
+    this.bossPresenter = this.sceneState.bossState
+      ? new BossPresenter({ THREE, scene: this.scene, visual: this.sceneState.bossState, smoothing: 28 })
+      : null;
     this.resize();
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
@@ -81,9 +85,11 @@ export class MultiplayerCourseRenderer {
     this.updateCamera(presentation.local, seconds);
     // Effects freeze with the room. They only read what is drawn.
     this.fx.update(view.phase === 'paused' ? 0 : seconds, presentation, view, this.playerVisuals);
+    this.bossPresenter?.applyCamera(this.camera, this.renderer);
     this.fx.beginRender(this.renderer);
     this.renderer.render(this.scene, this.camera);
     this.fx.endRender();
+    this.bossPresenter?.restoreCamera(this.camera);
   }
 
   syncPlayers(players) {
@@ -252,13 +258,7 @@ export class MultiplayerCourseRenderer {
     if (this.sceneState.goalObject) {
       this.sceneState.goalObject.rotation.y = Math.sin(this.elapsed * 1.6) * 0.05;
     }
-    if (this.sceneState.bossState && view.boss) {
-      const boss = this.sceneState.bossState;
-      this.glide(boss.sprite.position, view.boss.position.x, view.boss.position.y, view.boss.position.z);
-      boss.sprite.visible = view.boss.hp > 0;
-      boss.ring.position.copy(boss.sprite.position);
-      boss.ring.visible = view.boss.awake && view.boss.hp > 0;
-    }
+    if (view.boss) this.bossPresenter?.update(this.frameSeconds ?? 0, view.boss);
   }
 
   animateWorld() {
@@ -318,6 +318,7 @@ export class MultiplayerCourseRenderer {
     this.destroyed = true;
     this.resizeObserver.disconnect();
     this.fx.dispose();
+    this.bossPresenter?.dispose();
     this.sceneState.dispose();
     for (const child of [...this.scene.children]) this.disposeVisual(child);
     this.textures.dispose();

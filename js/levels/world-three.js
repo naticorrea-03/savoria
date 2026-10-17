@@ -61,4 +61,17 @@ export const WORLD_THREE_LEVELS = [
     ['run', 4, { shooter: 1, shooterAt: 0.5 }],
     ['goal', 0],
   ]),
+  // The world finale. A short warm-up so a retry gets back to the fight
+  // fast, then Don Funghi's arena. Defeating him clears the course.
+  level(3, 3, "Don Funghi's Cantina", 'taco', 240, [
+    ['run', 8, { coins: 4, deco: 'adobe' }],
+    ['gap', 4.5, { arc: 4 }],
+    ['run', 8, { enemy: 'meatball', deco: 'cactus' }],
+    ['river', 10, { flyer: 1 }],
+    ['run', 4],
+    ['steps', 2],
+    ['run', 6, { coins: 3, item: 'basil' }],
+    ['checkpoint', 0],
+    ['boss', 0],
+  ]),
 ];

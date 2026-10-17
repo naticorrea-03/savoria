@@ -20,5 +20,9 @@ export class Sfx {
   power()  { [520, 660, 880].forEach((f, i) => setTimeout(() => this.blip(f, 0.12, 'square', 0.08), i * 80)); }
   goal()   { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => this.blip(f, 0.2, 'triangle', 0.1), i * 130)); }
   boss()   { this.blip(90, 0.5, 'sawtooth', 0.12, -40); }
+  bossWindup() { this.blip(140, 0.45, 'triangle', 0.09, 260); }
+  bossSlam() { this.blip(70, 0.35, 'square', 0.14, -30); this.blip(120, 0.2, 'triangle', 0.1, -80); }
+  bossRoar() { this.blip(80, 0.7, 'sawtooth', 0.13, 60); setTimeout(() => this.blip(60, 0.6, 'sawtooth', 0.1, -20), 180); }
+  bossDefeat() { [392, 330, 262, 196].forEach((f, i) => setTimeout(() => this.blip(f, 0.22, 'sawtooth', 0.09, -40), i * 140)); }
 }
 export const sfx = new Sfx();

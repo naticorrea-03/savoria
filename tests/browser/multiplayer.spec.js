@@ -414,7 +414,7 @@ test('two browser contexts enter every released course through the production lo
   await host.addInitScript(() => {
     localStorage.setItem('savoria3d-save-v4', JSON.stringify({
       version: 4,
-      unlocked: 7,
+      unlocked: 8,
       best: { '1-1': 3, '1-2': 3, '2-1': 3 },
       chef: 'fatsio',
       sound: false,
@@ -422,7 +422,7 @@ test('two browser contexts enter every released course through the production lo
   });
 
   try {
-    for (const levelId of ['1-1', '1-2', '2-1', '2-2', '2-3', '3-1', '3-2']) {
+    for (const levelId of ['1-1', '1-2', '2-1', '2-2', '2-3', '3-1', '3-2', '3-3']) {
       await host.goto(`${ONLINE_ORIGIN}/play/`);
       await host.getByRole('button', { name: 'Online Co-op' }).click();
       await host.getByRole('button', { name: 'Create room' }).click();
@@ -452,12 +452,25 @@ test('two browser contexts enter every released course through the production lo
       const playerIds = await host.evaluate(() => (
         window.__savoriaTest.multiplayer.view.players.map(({ sessionId }) => sessionId)
       ));
-      await host.evaluate((playerId) => {
-        window.__savoriaTest.multiplayer.control({ action: 'goal', playerId });
-      }, playerIds[0]);
-      await host.evaluate((playerId) => {
-        window.__savoriaTest.multiplayer.control({ action: 'goal', playerId });
-      }, playerIds[1]);
+      if (levelId === '3-3') {
+        // The finale has no goal. Both chefs see Don Funghi, then his defeat
+        // clears the course for both.
+        for (const page of [host, guest]) {
+          await expect.poll(() => page.evaluate(() => (
+            window.__savoriaTest.multiplayer.view.boss?.mode
+          ))).toBe('sleep');
+        }
+        await host.evaluate((playerId) => {
+          window.__savoriaTest.multiplayer.control({ action: 'boss-defeat', playerId });
+        }, playerIds[0]);
+      } else {
+        await host.evaluate((playerId) => {
+          window.__savoriaTest.multiplayer.control({ action: 'goal', playerId });
+        }, playerIds[0]);
+        await host.evaluate((playerId) => {
+          window.__savoriaTest.multiplayer.control({ action: 'goal', playerId });
+        }, playerIds[1]);
+      }
       for (const page of [host, guest]) {
         await expect(page.locator('#complete-overlay')).toBeVisible();
         await expect.poll(() => page.evaluate(() => (
