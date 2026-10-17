@@ -58,6 +58,14 @@ async function startRoomOnCourseTwo(browser, origin) {
   const guestContext = await browser.newContext();
   const host = await hostContext.newPage();
   const guest = await guestContext.newPage();
+  // Set SAVORIA_CPU_THROTTLE=4 to rehearse a slow CI runner locally.
+  const throttle = Number(process.env.SAVORIA_CPU_THROTTLE) || 0;
+  if (throttle > 1) {
+    for (const page of [host, guest]) {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Emulation.setCPUThrottlingRate', { rate: throttle });
+    }
+  }
   const errors = [];
   for (const [label, page] of [['host', host], ['guest', guest]]) {
     page.on('console', (message) => {
@@ -136,29 +144,87 @@ async function waitForMover(page, min, max) {
   }).toBe(true);
 }
 
-// Holds an arrow key until the server has this chef standing on the mover a
-// little past its near edge, then lets go. Real key events only.
+// Server-side state of one chef relative to mover-1.
+function chefState(page, playerId) {
+  return page.evaluate(({ id, mover }) => {
+    const view = window.__savoriaTest.multiplayer.view;
+    const chef = view.players.find(({ sessionId }) => sessionId === id);
+    const platform = view.movingPlatforms.find((candidate) => candidate.id === mover);
+    return {
+      dx: chef.position.x - platform.position.x,
+      y: chef.position.y,
+      vx: chef.velocity.x,
+      grounded: chef.grounded,
+      onMover: chef.grounded && chef.groundMoverId === mover,
+      halfWidth: platform.width / 2,
+    };
+  }, { id: playerId, mover: MOVER_ID });
+}
+
+const describeChef = (state) => JSON.stringify({
+  dx: Number(state.dx.toFixed(2)),
+  y: Number(state.y.toFixed(2)),
+  vx: Number(state.vx.toFixed(2)),
+  onMover: state.onMover,
+});
+
+// Standing still on the platform, at least a chef width from either edge.
+const safelyAboard = (state) => state.onMover
+  && Math.abs(state.dx) <= state.halfWidth - 0.6
+  && Math.abs(state.vx) < 0.05;
+
+// Waits until the server has kept the chef stopped for 300 ms. The server
+// keeps the last input it got, so switching pages before the key release
+// reaches it would leave the chef walking.
+async function waitUntilSettled(page, playerId) {
+  let stillSince = null;
+  await expect.poll(async () => {
+    const state = await chefState(page, playerId);
+    const now = Date.now();
+    if (Math.abs(state.vx) >= 0.05 || !state.grounded) {
+      stillSince = null;
+      return false;
+    }
+    stillSince ??= now;
+    return now - stillSince >= 300;
+  }, { timeout: 8_000, intervals: [50] }).toBe(true);
+}
+
+// Real key events only. Holds the arrow toward the platform just until the
+// server has the chef on mover-1, so a late key release on a slow runner still
+// leaves almost a platform width of room. Then waits for the chef to stop and
+// nudges it toward the middle with short taps. Fails with the chef's state if
+// it cannot stand safely aboard.
 async function boardWithKeyboard(page, playerId, side) {
-  const key = side === 'left' ? 'ArrowRight' : 'ArrowLeft';
+  const towardCenter = side === 'left' ? 'ArrowRight' : 'ArrowLeft';
   await page.bringToFront();
-  const stage = page.locator('#multiplayer-course-stage');
-  await stage.focus();
-  await page.keyboard.down(key);
-  try {
-    await expect.poll(() => page.evaluate(({ id, mover, fromLeft }) => {
-      const view = window.__savoriaTest.multiplayer.view;
-      const chef = view.players.find(({ sessionId }) => sessionId === id);
-      const platform = view.movingPlatforms.find((candidate) => candidate.id === mover);
-      const target = platform.position.x + (fromLeft ? -0.6 : 0.6);
-      const reached = fromLeft ? chef.position.x >= target : chef.position.x <= target;
-      return chef.grounded && chef.groundMoverId === mover && reached;
-    }, { id: playerId, mover: MOVER_ID, fromLeft: side === 'left' }), {
-      timeout: 10_000,
-      intervals: [16],
-    }).toBe(true);
-  } finally {
-    await page.keyboard.up(key);
+  await page.locator('#multiplayer-course-stage').focus();
+  let state = await chefState(page, playerId);
+  if (!state.onMover) {
+    await page.keyboard.down(towardCenter);
+    try {
+      await expect.poll(async () => {
+        const now = await chefState(page, playerId);
+        return now.onMover || now.y < 3;
+      }, { timeout: 6_000, intervals: [16] }).toBe(true);
+    } catch {
+      // Reported below with the chef's state.
+    } finally {
+      await page.keyboard.up(towardCenter);
+    }
   }
+  for (let tap = 0; tap < 12; tap += 1) {
+    await waitUntilSettled(page, playerId).catch(() => {});
+    state = await chefState(page, playerId);
+    if (state.y < 3) throw new Error(`${side} chef fell while boarding: ${describeChef(state)}`);
+    if (!state.onMover) break;
+    if (safelyAboard(state)) return;
+    const nudge = state.dx < 0 ? 'ArrowRight' : 'ArrowLeft';
+    await page.keyboard.down(nudge);
+    await page.waitForTimeout(60);
+    await page.keyboard.up(nudge);
+  }
+  throw new Error(`${side} chef could not board mover-1 with the keyboard: ${describeChef(state)}`);
 }
 
 function swingWhileRiding(rows, sessionId) {
@@ -199,16 +265,25 @@ for (const oneWayDelayMs of [0, 40]) {
       await boardWithKeyboard(game.host, ids.host, 'left');
       await waitForMover(game.host, 0.95, 1);
       await boardWithKeyboard(game.guest, ids.guest, 'right');
-      await game.host.waitForTimeout(1000);
+      for (const [page, id] of [[game.host, ids.host], [game.guest, ids.guest]]) {
+        await waitUntilSettled(page, id);
+      }
 
       for (const page of [game.host, game.guest]) await recordDrawnFrames(page, MOVER_ID);
       await game.host.waitForTimeout(PERIOD_MS * 1.3);
 
-      const riding = await game.host.evaluate((mover) => (
-        window.__savoriaTest.multiplayer.view.players
-          .every(({ grounded, groundMoverId }) => grounded && groundMoverId === mover)
-      ), MOVER_ID);
-      expect(riding, 'both chefs rode the whole period').toBe(true);
+      const ride = await game.host.evaluate((mover) => {
+        const view = window.__savoriaTest.multiplayer.view;
+        const platform = view.movingPlatforms.find(({ id }) => id === mover);
+        return view.players.map((player) => ({
+          name: player.guestName,
+          riding: player.grounded && player.groundMoverId === mover,
+          dx: Number((player.position.x - platform.position.x).toFixed(2)),
+          y: Number(player.position.y.toFixed(2)),
+          lives: player.lives,
+        }));
+      }, MOVER_ID);
+      expect(ride.every(({ riding }) => riding), `both chefs rode the whole period: ${JSON.stringify(ride)}`).toBe(true);
 
       for (const [screen, page] of [['host', game.host], ['guest', game.guest]]) {
         const rows = await page.evaluate(() => window.__drawn);
