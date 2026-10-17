@@ -153,3 +153,39 @@ test('a 150 ms RTT network harness preserves immediate prediction through delay,
   local.reconcile(position(2), 3, { now: 400 });
   assert.deepEqual(local.sample(465), position(2));
 });
+
+test('render alpha blends between the last two 60 Hz predicted steps', () => {
+  const local = new LocalPrediction({
+    initial: position(0),
+    simulate: (current, controls, seconds) => position(current.x + controls.axis * seconds * 60),
+  });
+  local.applyInput(1, input(1), 1 / 60, 0);
+  local.applyInput(2, input(1), 1 / 60, 0);
+
+  local.setRenderAlpha(0.5);
+  assert.ok(Math.abs(local.sample(0).x - 1.5) < 1e-9);
+  local.setRenderAlpha(1);
+  assert.ok(Math.abs(local.sample(0).x - 2) < 1e-9);
+  local.setRenderAlpha(0);
+  assert.ok(Math.abs(local.sample(0).x - 1) < 1e-9);
+});
+
+test('a late patch extrapolates the remote player briefly, then holds', () => {
+  const remote = new RemoteInterpolation({ extrapolateMs: 80 });
+  remote.push(position(0), 1, 0);
+  remote.push(position(10), 4, 50);
+
+  assert.equal(remote.sample(150).x, 10);
+  assert.ok(Math.abs(remote.sample(170).x - 14) < 1e-9);
+  assert.ok(Math.abs(remote.sample(1000).x - 26) < 1e-9);
+  assert.equal(new RemoteInterpolation().sample(1000), null);
+});
+
+test('remote samples report the fractional tick they belong to', () => {
+  const remote = new RemoteInterpolation();
+  remote.push(position(0), 10, 0);
+  remote.push(position(10), 13, 50);
+  const sampled = remote.sampleWithTick(125);
+  assert.ok(Math.abs(sampled.value.x - 5) < 1e-9);
+  assert.ok(Math.abs(sampled.tick - 11.5) < 1e-9);
+});

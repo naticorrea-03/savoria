@@ -1,9 +1,11 @@
 import { InputState } from '../gameplay/input-state.js';
 import { applyPlayerInput } from '../gameplay/player-state.js';
 import {
+  COURSE_TICKS_PER_SECOND,
   coursePlayerWorld,
   createCourseWorld,
-  syncCourseWorld,
+  moverPositionAt,
+  poseMover,
 } from '../gameplay/course-world.js';
 import {
   LocalPrediction,
@@ -21,7 +23,8 @@ const INPUT_CODES = new Set([
   'ShiftRight',
   'Space',
 ]);
-const INPUT_STEP_SECONDS = 1 / 60;
+const INPUT_STEP_SECONDS = 1 / COURSE_TICKS_PER_SECOND;
+const REMOTE_EXTRAPOLATION_MS = 80;
 
 export class MultiplayerRunLoop {
   constructor({
@@ -91,12 +94,11 @@ export class MultiplayerRunLoop {
     this.lastAuthoritativeTick = view.authoritativeTick;
     const local = view.players.find(({ isLocal }) => isLocal);
     if (!local) return false;
-    syncCourseWorld(this.predictionWorld, view.movingPlatforms, view.authoritativeTick);
 
     if (!this.localPrediction) {
       this.inputOrdinal = local.acceptedInputCount;
       this.localPrediction = new LocalPrediction({
-        initial: predictionState(local),
+        initial: predictionState(local, view.authoritativeTick),
         simulate: (current, controls, seconds) => predictPlayerMotion(
           current,
           controls,
@@ -109,7 +111,7 @@ export class MultiplayerRunLoop {
       const snapReason = local.snapRevision > this.localSnapRevision
         ? local.snapReason
         : undefined;
-      this.localPrediction.reconcile(predictionState(local), local.acceptedInputCount, snapReason
+      this.localPrediction.reconcile(predictionState(local, view.authoritativeTick), local.acceptedInputCount, snapReason
         ? { now: receivedAt, reason: snapReason }
         : { now: receivedAt });
       this.localSnapRevision = Math.max(this.localSnapRevision, local.snapRevision);
@@ -119,7 +121,7 @@ export class MultiplayerRunLoop {
       if (player.isLocal) continue;
       let remote = this.remoteInterpolation.get(player.sessionId);
       if (!remote) {
-        remote = new RemoteInterpolation();
+        remote = new RemoteInterpolation({ extrapolateMs: REMOTE_EXTRAPOLATION_MS });
         this.remoteInterpolation.set(player.sessionId, remote);
       }
       remote.push(player.position, view.authoritativeTick, receivedAt);
@@ -196,6 +198,7 @@ export class MultiplayerRunLoop {
       this.inputAccumulator -= INPUT_STEP_SECONDS;
       acceptJump = false;
     }
+    this.localPrediction.setRenderAlpha(this.inputAccumulator / INPUT_STEP_SECONDS);
     this.publish(now);
   }
 
@@ -207,20 +210,53 @@ export class MultiplayerRunLoop {
 
   publish(now) {
     if (!this.lastView || !this.localPrediction) return;
+    const localTick = this.renderTick();
+    const platforms = platformPositionsAtTick(this.predictionWorld, localTick);
     const players = this.lastView.players.map((player) => ({
       ...player,
       position: player.isLocal
         ? this.localPrediction.sample(now)
-        : this.remoteInterpolation.get(player.sessionId)?.sample(now) ?? player.position,
+        : this.remotePosition(player, now, platforms),
     }));
     const local = players.find(({ isLocal }) => isLocal);
     this.presentation = {
       authoritativeTick: this.lastView.authoritativeTick,
       players,
       local,
+      movingPlatforms: platforms,
       cameraTarget: local?.position ?? null,
     };
     this.onPresentation(this.presentation);
+  }
+
+  // The tick the local player is drawn at. Platforms use the same clock so a
+  // rider and the platform under them always agree on screen.
+  renderTick() {
+    const predicted = this.localPrediction?.predicted;
+    if (!predicted || !this.authorityPlaying) return this.lastView?.authoritativeTick ?? 0;
+    const tick = Number(predicted.tick) || 0;
+    return tick - 1 + this.localPrediction.renderAlpha;
+  }
+
+  // Remote players are drawn about 100 ms in the past, but the platform they
+  // stand on is drawn at the local tick. Keep their offset from the platform
+  // fixed, so a remote rider moves with the platform instead of sliding on it.
+  remotePosition(player, now, platforms) {
+    const remote = this.remoteInterpolation.get(player.sessionId);
+    const sampled = remote?.sampleWithTick(now);
+    if (!sampled) return player.position;
+    const platform = this.predictionWorld.movingPlatforms.find(
+      ({ id }) => id === player.groundMoverId,
+    );
+    if (!platform || player.grounded !== true) return sampled.value;
+    const then = moverPositionAt(platform, sampled.tick / COURSE_TICKS_PER_SECOND);
+    const current = platforms.find(({ id }) => id === platform.id)?.position;
+    if (!current) return sampled.value;
+    return {
+      ...sampled.value,
+      x: sampled.value.x + current.x - then[0],
+      y: sampled.value.y + current.y - then[1],
+    };
   }
 
   attachInput() {
@@ -253,7 +289,7 @@ export class MultiplayerRunLoop {
       this.inputOrdinal = local.acceptedInputCount;
       if (!this.localPrediction) {
         this.localPrediction = new LocalPrediction({
-          initial: predictionState(local),
+          initial: predictionState(local, view.authoritativeTick),
           simulate: (current, controls, seconds) => predictPlayerMotion(
             current,
             controls,
@@ -262,7 +298,7 @@ export class MultiplayerRunLoop {
           ),
         });
       } else {
-        this.localPrediction.reset(predictionState(local));
+        this.localPrediction.reset(predictionState(local, view.authoritativeTick));
       }
       this.localSnapRevision = local.snapRevision;
     }
@@ -270,7 +306,7 @@ export class MultiplayerRunLoop {
       if (player.isLocal) continue;
       let remote = this.remoteInterpolation.get(player.sessionId);
       if (!remote) {
-        remote = new RemoteInterpolation();
+        remote = new RemoteInterpolation({ extrapolateMs: REMOTE_EXTRAPOLATION_MS });
         this.remoteInterpolation.set(player.sessionId, remote);
       }
       remote.reset(player.position, view.authoritativeTick, now);
@@ -279,10 +315,11 @@ export class MultiplayerRunLoop {
   }
 }
 
-function predictionState(player = {}) {
+function predictionState(player = {}, tick = player.tick) {
   const position = player.position ?? player;
   const velocity = player.velocity ?? {};
   return {
+    tick: Number(tick) || 0,
     x: Number(position.x) || 0,
     y: Number(position.y) || 0,
     z: Number(position.z) || 0,
@@ -305,13 +342,13 @@ function predictionState(player = {}) {
 }
 
 function predictPlayerMotion(state, controls, seconds, world) {
-  const platform = world.movingPlatforms.find(({ id }) => id === state.groundMoverId);
-  const carriedX = state.x + (platform?.velocityX ?? 0) * seconds;
-  const carriedY = state.y + (platform?.velocityY ?? 0) * seconds;
+  const fromTick = Number(state.tick) || 0;
+  const toTick = fromTick + 1;
+  const carry = advancePlatforms(world, state, fromTick, toTick);
   const next = applyPlayerInput({
     ...state,
-    positionX: carriedX,
-    positionY: carriedY,
+    positionX: state.x + carry[0],
+    positionY: state.y + carry[1],
     positionZ: state.z,
   }, controls, coursePlayerWorld(world, state), seconds);
   next.groundMoverId = findGroundMoverId(next, world);
@@ -322,6 +359,48 @@ function predictPlayerMotion(state, controls, seconds, world) {
       y: next.positionY,
       z: next.positionZ,
     },
+  }, toTick);
+}
+
+// Mirrors the server's updateMovingPlatforms: riders are found against the
+// platform where it stood on the previous tick, then carried by exactly the
+// distance the platform moves this tick. Platforms are then posed at the new
+// tick so collisions use the same geometry the server will use.
+function advancePlatforms(world, state, fromTick, toTick) {
+  const carry = [0, 0];
+  let carried = false;
+  for (const platform of world.movingPlatforms) {
+    const before = moverPositionAt(platform, fromTick / COURSE_TICKS_PER_SECOND);
+    const after = moverPositionAt(platform, toTick / COURSE_TICKS_PER_SECOND);
+    if (!carried && isRiding(state, platform, before)) {
+      carry[0] = after[0] - before[0];
+      carry[1] = after[1] - before[1];
+      carried = true;
+    }
+    poseMover(platform, after);
+  }
+  return carry;
+}
+
+function isRiding(state, platform, position) {
+  const halfWidth = platform.width / 2;
+  const top = position[1] + platform.height / 2;
+  return state.x > position[0] - halfWidth - state.width / 2
+    && state.x < position[0] + halfWidth + state.width / 2
+    && Math.abs(state.y - top) < 0.06
+    && state.velocityY <= 0.01;
+}
+
+export function platformPositionsAtTick(world, tick) {
+  return world.movingPlatforms.map((platform) => {
+    const [x, y, z] = moverPositionAt(platform, tick / COURSE_TICKS_PER_SECOND);
+    return {
+      id: platform.id,
+      position: { x, y, z },
+      width: platform.width,
+      height: platform.height,
+      depth: platform.depth,
+    };
   });
 }
 
