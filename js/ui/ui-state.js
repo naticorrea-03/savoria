@@ -301,14 +301,16 @@ function renderTitleHub(doc, state) {
   const world = RELEASED_WORLDS.find(({ n }) => n === progress.currentWorld);
   const courseStars = state.save.best[progress.currentLevelId] ?? 0;
   const sushiOpen = state.save.unlocked >= 3;
+  const tacoOpen = state.save.unlocked >= 6;
 
   const copy = {
-    'title-total-stars': `${progress.totalStars}/12`,
-    'title-completed-courses': `${progress.completedCourses}/4`,
+    'title-total-stars': `${progress.totalStars}/${RELEASED_LEVELS.length * 3}`,
+    'title-completed-courses': `${progress.completedCourses}/${RELEASED_LEVELS.length}`,
     'title-current-world': `World ${progress.currentWorld} · ${world?.name ?? 'Savoria'}`,
     'title-current-course': `${progress.currentLevelId} ${progress.currentLevelName}`,
     'title-world-one-stars': `${progress.worldStars[1]}/6 stars`,
-    'title-world-two-stars': sushiOpen ? `${progress.worldStars[2]}/6 stars` : 'Locked',
+    'title-world-two-stars': sushiOpen ? `${progress.worldStars[2]}/9 stars` : 'Locked',
+    'title-world-three-stars': tacoOpen ? `${progress.worldStars[3]}/6 stars` : 'Locked',
   };
   for (const [id, text] of Object.entries(copy)) {
     const element = doc.getElementById(id);
@@ -322,6 +324,7 @@ function renderTitleHub(doc, state) {
   }
 
   doc.querySelector('[data-world="2"]')?.classList.toggle('locked', !sushiOpen);
+  doc.querySelector('[data-world="3"]')?.classList.toggle('locked', !tacoOpen);
   for (const chef of doc.querySelectorAll('.title-chef')) {
     const selected = chef.dataset.characterId === state.save.chef;
     chef.classList.toggle('is-selected', selected);

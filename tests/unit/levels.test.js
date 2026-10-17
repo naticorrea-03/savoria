@@ -19,11 +19,11 @@ function snapshotLevel(definition) {
   };
 }
 
-test('release exposes four courses across Pasta Plains and Sushi Shores', () => {
-  assert.deepEqual(RELEASED_WORLDS.map((world) => world.n), [1, 2]);
+test('release exposes seven courses across Pasta Plains, Sushi Shores, and Taco Territory', () => {
+  assert.deepEqual(RELEASED_WORLDS.map((world) => world.n), [1, 2, 3]);
   assert.deepEqual(
     RELEASED_LEVELS.map((level) => level.id),
-    ['1-1', '1-2', '2-1', '2-2'],
+    ['1-1', '1-2', '2-1', '2-2', '2-3', '3-1', '3-2'],
   );
 });
 

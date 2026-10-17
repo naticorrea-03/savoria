@@ -2,9 +2,9 @@
 
 ## Start here
 
-Released courses are defined in [`js/levels/world-one.js`](./js/levels/world-one.js) and [`js/levels/world-two.js`](./js/levels/world-two.js). Read [`js/levels/validate.js`](./js/levels/validate.js) before changing a recipe. Read [`js/levels/compiler.js`](./js/levels/compiler.js) when you need to understand what a primitive creates.
+Released courses are defined in [`js/levels/world-one.js`](./js/levels/world-one.js) and [`js/levels/world-two.js`](./js/levels/world-two.js), and [`js/levels/world-three.js`](./js/levels/world-three.js). Read [`js/levels/validate.js`](./js/levels/validate.js) before changing a recipe. Read [`js/levels/compiler.js`](./js/levels/compiler.js) when you need to understand what a primitive creates.
 
-Worlds 3 through 6 in `js/experimental/` are hidden experiments. Do not present them as released content or add them to the release registry.
+Worlds 4 through 6 in `js/experimental/` are hidden experiments. Do not present them as released content or add them to the release registry.
 
 ## Claude Code prompt
 

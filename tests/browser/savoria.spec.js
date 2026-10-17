@@ -119,12 +119,12 @@ test('home opens the game directly and shows every planned world', async ({ page
   await expect(page.locator('.title-chef')).toHaveCount(3);
   await expect(page.getByRole('complementary', { name: 'Adventure board' })).toBeVisible();
   await expect(page.locator('.title-world-card')).toHaveCount(6);
-  await expect(page.locator('.title-world-card.unreleased.locked')).toHaveCount(4);
-  await expect(page.getByText('Taco Territory')).toBeVisible();
+  await expect(page.locator('.title-world-card.unreleased.locked')).toHaveCount(3);
+  await expect(page.locator('.title-world-card', { hasText: 'Taco Territory' })).toBeVisible();
   await expect(page.getByText('Curry Cliffs')).toBeVisible();
   await expect(page.getByText('Dumpling Dynasty')).toBeVisible();
   await expect(page.getByText('Dessert Dome')).toBeVisible();
-  await expect(page.locator('.title-stat').first()).toContainText('0/12');
+  await expect(page.locator('.title-stat').first()).toContainText('0/21');
   await page.getByRole('button', { name: 'Solo Adventure' }).click();
   await expect(page.getByRole('heading', { name: 'Who is cooking?' })).toBeVisible();
   await expect(page.getByText('Every chef shares the same moves. Pick your favorite.')).toBeVisible();
@@ -132,10 +132,10 @@ test('home opens the game directly and shows every planned world', async ({ page
 
   await page.getByRole('button', { name: /^Dinnerette/ }).click();
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'world');
-  await expect(page.locator('.world-strip')).toHaveCount(2);
+  await expect(page.locator('.world-strip')).toHaveCount(3);
   await expect(page.getByRole('region', { name: 'World 1, Pasta Plains' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'World 2, Sushi Shores' })).toBeVisible();
-  await expect(page.locator('[data-action="select-level"]')).toHaveCount(4);
+  await expect(page.locator('[data-action="select-level"]')).toHaveCount(7);
   await expect(page.getByRole('button', { name: /1-1 Farfalle Fields/ })).toBeEnabled();
   await expect(page.getByRole('button', { name: /1-2 Penne Ridge, locked/ })).toBeDisabled();
   await expect(page.getByRole('button', { name: /2-1 Nori Narrows, locked/ })).toBeDisabled();
@@ -411,14 +411,67 @@ test('Sushi Shores loads themed art, unlocks 2-2, completes, and resumes', async
     session.player.pos.copy(session.goalObject.position);
     session.player.vel.set(0, 0, 0);
   });
+  await expect(page.locator('#app')).toHaveAttribute('data-screen', 'complete');
+  await page.getByRole('button', { name: 'World map' }).click();
+  await expect(page.getByRole('button', { name: /2-3 Sashimi Summit/ })).toBeEnabled();
+  await page.getByRole('button', { name: /2-3 Sashimi Summit/ }).click();
+  await expect(page.locator('#hlp-num')).toHaveText('2-3');
+  await page.evaluate(() => {
+    const session = window.__savoriaTest.session;
+    session.player.pos.copy(session.goalObject.position);
+    session.player.vel.set(0, 0, 0);
+  });
   await expect(page.getByRole('heading', { name: 'World 2 complete!' })).toBeVisible();
   await page.getByRole('button', { name: 'World map' }).click();
+  await expect(page.getByRole('button', { name: /3-1 Tortilla Trail/ })).toBeEnabled();
 
   await page.reload();
   await waitForTitle(page);
   await page.getByRole('button', { name: 'Solo Adventure' }).click();
   await page.getByRole('button', { name: /^Dinnerette/ }).click();
   await expect(page.getByRole('button', { name: /2-2 Wasabi Falls, 2 of 3 stars/ })).toBeEnabled();
+  await expectClean(page, diagnostics);
+});
+
+test('Taco Territory loads 3-1 and 3-2 cleanly and 3-2 completes the world', async ({ page }) => {
+  const diagnostics = await monitorPage(page);
+
+  await page.goto('/play/');
+  await page.evaluate(() => {
+    localStorage.setItem('savoria3d-save-v4', JSON.stringify({
+      version: 4,
+      unlocked: 6,
+      best: { '1-1': 3, '1-2': 3, '2-1': 3, '2-2': 3, '2-3': 3 },
+      chef: 'dinnerette',
+      sound: false,
+    }));
+  });
+  await page.reload();
+  await waitForTitle(page);
+  await expect(page.locator('#title-world-three-stars')).toHaveText('0/6 stars');
+  await page.getByRole('button', { name: 'Solo Adventure' }).click();
+  await page.getByRole('button', { name: /^Dinnerette/ }).click();
+
+  await page.getByRole('button', { name: /3-1 Tortilla Trail/ }).click();
+  await expect(page.locator('#app')).toHaveAttribute('data-screen', 'playing');
+  await expect(page.locator('#hlp-world')).toHaveText('TACO TERRITORY');
+  await expect(page.locator('#hlp-num')).toHaveText('3-1');
+  await page.evaluate(() => {
+    const session = window.__savoriaTest.session;
+    session.player.pos.copy(session.goalObject.position);
+    session.player.vel.set(0, 0, 0);
+  });
+  await expect(page.locator('#app')).toHaveAttribute('data-screen', 'complete');
+  await page.getByRole('button', { name: 'World map' }).click();
+
+  await page.getByRole('button', { name: /3-2 Habanero Heights/ }).click();
+  await expect(page.locator('#hlp-num')).toHaveText('3-2');
+  await page.evaluate(() => {
+    const session = window.__savoriaTest.session;
+    session.player.pos.copy(session.goalObject.position);
+    session.player.vel.set(0, 0, 0);
+  });
+  await expect(page.getByRole('heading', { name: 'World 3 complete!' })).toBeVisible();
   await expectClean(page, diagnostics);
 });
 

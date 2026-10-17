@@ -3,9 +3,10 @@ import { THEMES } from './themes.js';
 import { assertValidReleasedLevels } from './validate.js';
 import { WORLD_ONE, WORLD_ONE_LEVELS } from './world-one.js';
 import { WORLD_TWO, WORLD_TWO_LEVELS } from './world-two.js';
+import { WORLD_THREE, WORLD_THREE_LEVELS } from './world-three.js';
 
-export const RELEASED_WORLDS = [WORLD_ONE, WORLD_TWO];
-export const RELEASED_LEVELS = [...WORLD_ONE_LEVELS, ...WORLD_TWO_LEVELS];
+export const RELEASED_WORLDS = [WORLD_ONE, WORLD_TWO, WORLD_THREE];
+export const RELEASED_LEVELS = [...WORLD_ONE_LEVELS, ...WORLD_TWO_LEVELS, ...WORLD_THREE_LEVELS];
 
 assertValidReleasedLevels(RELEASED_LEVELS);
 
