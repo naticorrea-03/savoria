@@ -29,6 +29,8 @@ import {
   RELEASED_WORLDS,
   buildReleasedLevel,
 } from '../levels/index.js';
+import { createCinematics } from './cinematics.js';
+import { createBossCard } from './boss-card.js';
 import { createHudMotion } from './hud-motion.js';
 import { createActiveProgressReporter } from './level-loading.js';
 import { loadSave, writeSave } from './save-store.js';
@@ -40,6 +42,8 @@ import {
   reduceUiState,
   renderUi,
 } from './ui-state.js';
+import { createWorldMap } from './world-map.js';
+import { worldAccent } from './world-map-layout.js';
 
 const $ = (id) => document.getElementById(id);
 const app = $('app');
@@ -56,6 +60,24 @@ let lives = 4;
 let levelStartId = 0;
 let msgTimer = null;
 const hudMotion = createHudMotion();
+const coopHudMotion = createHudMotion({
+  counterId: 'multiplayer-tomato-count',
+  tomatoesId: 'multiplayer-tomatoes',
+  layerParentId: 'online-course-screen',
+});
+let coopTomatoCount = null;
+const cinematics = createCinematics();
+let goalBeatPending = null;
+const worldMap = createWorldMap({
+  cinematics,
+  onOpenWorld: (world) => {
+    sfx.coin();
+    dispatch({ type: 'OPEN_WORLD', world });
+  },
+  onEnterCourse: (index) => enterCourse(index),
+});
+const bossCard = createBossCard({ mount: $('hud') });
+const coopBossCard = createBossCard({ mount: $('multiplayer-course-stage'), showBar: true });
 const hasWebGL = createWebGLCapabilityProbe(() => document.createElement('canvas'));
 let localIdentity = getLocalIdentity(localStorage);
 let multiplayerClient = null;
@@ -80,11 +102,37 @@ function dispatch(event) {
   uiState = next;
   if (next.save !== previous.save) writeSave(localStorage, next.save);
   renderUi(next, { previousScreen: previous.screen });
+  worldMap.render(next);
   if (next.screen === 'world') $('map-lives').textContent = String(lives);
   if (next.screen === 'complete' && previous.screen !== 'complete') {
-    hudMotion.countUp($('complete-stats'));
+    stageCompletion();
+  } else if (next.screen !== 'complete' && previous.screen === 'complete') {
+    $('complete-overlay').classList.remove('is-revealed');
   }
   return true;
+}
+
+// Solo finishes get a beat of celebration in the world before the card.
+function stageCompletion() {
+  const overlay = $('complete-overlay');
+  overlay.classList.remove('is-revealed');
+  const beat = goalBeatPending;
+  goalBeatPending = null;
+  if (!beat) {
+    revealCompletionCard();
+    return;
+  }
+  cinematics.goalBeat({ ...beat, onDone: revealCompletionCard });
+}
+
+function revealCompletionCard() {
+  if (uiState.screen !== 'complete') return;
+  const overlay = $('complete-overlay');
+  overlay.classList.remove('is-revealed');
+  void overlay.offsetWidth;
+  overlay.classList.add('is-revealed');
+  hudMotion.countUp($('complete-stats'));
+  cinematics.revealStars($('complete-stars'), overlay.querySelector('.panel'));
 }
 
 function renderHearts(count) {
@@ -166,6 +214,9 @@ function onGameEvent(type, data) {
       if (data.hp <= 0) {
         setTimeout(() => { $('hud-boss').style.display = 'none'; }, 1200);
       }
+      break;
+    case 'boss':
+      bossCard.sync(data);
       break;
     case 'pause':
       if (dispatch({ type: 'PAUSE' })) session?.pause();
@@ -267,8 +318,14 @@ async function startLevel(index) {
   $('hlp-stars').setAttribute('aria-label', `${stars} of 3 course stars`);
   $('hud-power').style.display = 'none';
   $('hud-boss').style.display = 'none';
+  bossCard.reset();
   dispatch({ type: 'LOAD_READY' });
-  hudMsg(level.name, 2600);
+  cinematics.courseCard({
+    id: definition.id,
+    name: definition.name,
+    worldName: `World ${world.n} · ${world.name}`,
+    accent: worldAccent(world.theme).accent,
+  });
   session.start();
 }
 
@@ -294,7 +351,23 @@ function onDied() {
   }, 1100);
 }
 
+function goalScreenPoint() {
+  const goal = session?.goalObject?.position;
+  if (!goal || !session.camera) return {};
+  const point = goal.clone();
+  point.y += 1.5;
+  point.project(session.camera);
+  return {
+    x: Math.min(innerWidth - 80, Math.max(80, (point.x + 1) * 0.5 * innerWidth)),
+    y: Math.min(innerHeight - 120, Math.max(140, (1 - point.y) * 0.5 * innerHeight)),
+  };
+}
+
 function onComplete(stats) {
+  goalBeatPending = {
+    ...goalScreenPoint(),
+    title: stats.isBoss ? 'Boss down!' : 'Course clear!',
+  };
   const coinPercent = stats.totalCoins ? stats.coins / stats.totalCoins : 1;
   const stars = 1 + (coinPercent >= 0.6 ? 1 : 0) + (stats.hearts >= 2 ? 1 : 0);
   dispatch({
@@ -536,9 +609,16 @@ function renderMultiplayerPresentation(presentation) {
   for (const [sessionId, marker] of existing) {
     if (!activeIds.has(sessionId)) marker.remove();
   }
-  $('multiplayer-tomato-count').textContent = String(lobbyView?.tomatoCount ?? 0);
+  const tomatoCount = lobbyView?.tomatoCount ?? 0;
+  if (coopTomatoCount === null) {
+    coopHudMotion.resetTomatoes(tomatoCount);
+  } else if (tomatoCount !== coopTomatoCount) {
+    coopHudMotion.setTomatoes(tomatoCount, { delayMs: coopHudMotion.flightMs - 120 });
+  }
+  coopTomatoCount = tomatoCount;
   $('multiplayer-timer').textContent = formatTime(lobbyView?.timer ?? 0);
   multiplayerCourseRenderer?.render(presentation, lobbyView, performance.now());
+  coopBossCard.sync(lobbyView?.boss ?? null);
 }
 
 async function loadMultiplayerCourse(view) {
@@ -583,6 +663,9 @@ async function loadMultiplayerCourse(view) {
     pixelRatio: browserTestRendering ? 1 : Math.min(devicePixelRatio, 2),
     shadows: !browserTestRendering,
     minimumFrameMs: browserTestRendering ? 100 : 0,
+    onFx: (type, data) => {
+      if (type === 'fx' && data?.type === 'tomato') coopHudMotion.flyTomato(data.x, data.y, data.count);
+    },
   });
   $('multiplayer-course-title').textContent = `${definition.id} ${definition.name}`;
   $('multiplayer-course-status').textContent = view.isHost
@@ -641,6 +724,8 @@ function stopMultiplayerCourse() {
   multiplayerPresentation = null;
   multiplayerCourseRenderer?.destroy();
   multiplayerCourseRenderer = null;
+  coopTomatoCount = null;
+  coopBossCard.reset();
 }
 
 function handleMultiplayerStatus(status) {
@@ -704,6 +789,20 @@ async function leaveLobby() {
   await leavingClient?.leave();
 }
 
+function enterCourse(index) {
+  const definition = RELEASED_LEVELS[index];
+  if (!definition) return;
+  const selected = dispatch({
+    type: 'SELECT_LEVEL',
+    levelId: definition.id,
+    levelIndex: index,
+  });
+  if (selected) {
+    sfx.coin();
+    startLevel(index);
+  }
+}
+
 function handleAction(action, target, event) {
   switch (action) {
     case 'start':
@@ -744,19 +843,9 @@ function handleAction(action, target, event) {
     case 'back-to-characters':
       dispatch({ type: 'BACK_TO_CHARACTERS' });
       break;
-    case 'select-level': {
-      const index = Number(target.dataset.levelIndex);
-      const selected = dispatch({
-        type: 'SELECT_LEVEL',
-        levelId: target.dataset.levelId,
-        levelIndex: index,
-      });
-      if (selected) {
-        sfx.coin();
-        startLevel(index);
-      }
+    case 'back-to-worlds':
+      dispatch({ type: 'BACK_TO_WORLDS' });
       break;
-    }
     case 'resume':
       if (dispatch({ type: 'RESUME' })) session?.resume();
       break;
@@ -854,11 +943,18 @@ const multiplayerTestHooks = isBrowserTestMode() ? {
   control(payload) { multiplayerClient?.testControl(payload); },
   drop() { multiplayerClient?.dropForTest(); },
   reconnect() { return multiplayerClient?.reconnectForTest(); },
+  courseRenderer() { return multiplayerCourseRenderer; },
 } : {};
 
 window.__savoriaTest = {
   startLevel,
   showScreen,
+  map: {
+    get view() { return worldMap.view; },
+    get chefAt() { return worldMap.chefAt; },
+    get walking() { return worldMap.walking; },
+    get cinematic() { return cinematics.active; },
+  },
   releasedLevels: RELEASED_LEVELS,
   get session() { return session; },
   multiplayer: {
@@ -886,6 +982,7 @@ window.__savoriaTest = {
 };
 
 renderUi(uiState);
+worldMap.render(uiState);
 if (roomCodeFromSearch(location.search)) openOnline();
 if (uiState.notice) {
   setTimeout(() => dispatch({ type: 'DISMISS_NOTICE' }), 6000);

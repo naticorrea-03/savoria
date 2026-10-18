@@ -9,6 +9,7 @@
   <link rel="preload" href="assets/home/savoria-kingdom-hub.png" as="image" fetchpriority="high">
   <link rel="stylesheet" href="styles/tokens.css">
   <link rel="stylesheet" href="styles/game.css">
+  <link rel="stylesheet" href="styles/boss.css">
 </head>
 <body>
   <div id="desktop-required">
@@ -196,7 +197,7 @@
           data-primary
         >
           <div class="multiplayer-shared-hud" aria-label="Shared course progress">
-            <span><img src="assets/sprites/tomato.png" alt=""> <strong id="multiplayer-tomato-count">0</strong></span>
+            <span id="multiplayer-tomatoes"><img src="assets/sprites/tomato.png" alt=""> <strong id="multiplayer-tomato-count">0</strong></span>
             <span>🕐 <strong id="multiplayer-timer">0:00</strong></span>
           </div>
           <div id="multiplayer-course-players" class="multiplayer-course-players"></div>
@@ -213,16 +214,17 @@
       <div class="card-row" id="char-cards"></div>
     </div>
 
-    <div id="map-screen" class="screen hidden" data-ui-state="world">
-      <div class="map-head">
-        <div>
-          <div class="map-kicker">Choose a course</div>
-          <h1 class="screen-title">Savoria Worlds</h1>
-        </div>
-        <div class="map-meta">👨‍🍳 ×<span id="map-lives">4</span></div>
-      </div>
-      <div id="map-worlds"></div>
-      <button class="btn small" id="btn-back-char" data-action="back-to-characters">← Change chef</button>
+    <div id="map-screen" class="screen hidden" data-ui-state="world" data-map-view="select">
+      <div class="map-meta" aria-label="Chefs left">👨‍🍳 ×<span id="map-lives">4</span></div>
+      <section id="world-select" class="world-select" aria-labelledby="world-select-title">
+        <header class="map-head">
+          <div class="map-kicker">Choose a world</div>
+          <h1 class="screen-title" id="world-select-title">Savoria Worlds</h1>
+        </header>
+        <div id="world-cards" class="world-cards" role="group" aria-label="Worlds"></div>
+        <button class="btn small" id="btn-back-char" data-action="back-to-characters">← Change chef</button>
+      </section>
+      <section id="overworld" class="overworld hidden" aria-labelledby="overworld-title"></section>
     </div>
 
     <div id="hurt-flash"></div>

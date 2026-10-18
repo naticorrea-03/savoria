@@ -4,9 +4,10 @@ export const LOCAL_CORRECTION_MS = 65;
 const SNAP_REASONS = new Set(['respawn', 'door', 'checkpoint']);
 
 export class RemoteInterpolation {
-  constructor({ delayMs = REMOTE_INTERPOLATION_MS, extrapolateMs = 0 } = {}) {
+  constructor({ delayMs = REMOTE_INTERPOLATION_MS, extrapolateMs = 0, tickMs = 1000 / 60 } = {}) {
     this.delayMs = delayMs;
     this.extrapolateMs = extrapolateMs;
+    this.tickMs = tickMs;
     this.samples = [];
   }
 
@@ -30,7 +31,9 @@ export class RemoteInterpolation {
   // Same as sample, plus the authoritative tick the returned position belongs
   // to (fractional between two patches). Callers use it to put the remote
   // player on the same clock as the moving platform under them.
-  sampleWithTick(now) {
+  // extrapolate: false holds the newest patch instead of guessing past it.
+  // A rider on a moving platform is placed from the platform clock instead.
+  sampleWithTick(now, { extrapolate = true } = {}) {
     if (this.samples.length === 0) return null;
     const renderAt = now - this.delayMs;
     const first = this.samples[0];
@@ -38,7 +41,11 @@ export class RemoteInterpolation {
       return { value: copyPosition(first.value), tick: first.authoritativeTick };
     }
     const last = this.samples.at(-1);
-    if (renderAt >= last.receivedAt) return this.extrapolate(renderAt, last);
+    if (renderAt >= last.receivedAt) {
+      return extrapolate
+        ? this.extrapolate(renderAt, last)
+        : { value: copyPosition(last.value), tick: last.authoritativeTick };
+    }
 
     for (let index = 1; index < this.samples.length; index += 1) {
       const after = this.samples[index];
@@ -56,13 +63,17 @@ export class RemoteInterpolation {
 
   // A late patch used to freeze the remote player and then jump. Keep moving
   // along the last observed velocity for a short, capped time instead.
+  // The velocity uses the server time between the two patches. A busy page
+  // can receive two patches in the same millisecond, and dividing by that
+  // receive gap threw the remote chef units ahead for a frame.
   extrapolate(renderAt, last) {
     const before = this.samples.at(-2);
     const overshoot = Math.min(this.extrapolateMs, renderAt - last.receivedAt);
-    if (!before || overshoot <= 0 || last.receivedAt <= before.receivedAt) {
+    const ticks = before ? last.authoritativeTick - before.authoritativeTick : 0;
+    if (!before || overshoot <= 0 || ticks <= 0) {
       return { value: copyPosition(last.value), tick: last.authoritativeTick };
     }
-    const span = last.receivedAt - before.receivedAt;
+    const span = ticks * this.tickMs;
     const progress = 1 + overshoot / span;
     const value = lerpPosition(before.value, last.value, progress);
     return {
@@ -111,9 +122,13 @@ export class LocalPrediction {
     return this.sample(now);
   }
 
+  // carry: how far the ground under the rider moved between the old and the
+  // new render tick. Folding it into the correction keeps a rider glued to a
+  // moving platform when a patch shifts the predicted tick by a step or two.
   reconcile(authoritative, acknowledgedSequence, {
     now,
     reason = 'authority',
+    carry = null,
   } = {}) {
     if (SNAP_REASONS.has(reason)) {
       this.reset(authoritative);
@@ -130,21 +145,29 @@ export class LocalPrediction {
     }
     this.predicted = replayed;
     this.previous = previous;
+    const carried = typeof carry === 'function' ? carry(this.predicted) : carry;
+    // Measure the correction against what will actually be drawn next, the
+    // blend of the two newest states, not the newest state alone.
+    const drawn = this.base();
     this.correction = {
       offset: {
-        x: visible.x - replayed.x,
-        y: visible.y - replayed.y,
-        z: visible.z - replayed.z,
+        x: visible.x - drawn.x + (carried?.x ?? 0),
+        y: visible.y - drawn.y + (carried?.y ?? 0),
+        z: visible.z - drawn.z,
       },
       startedAt: now,
     };
     return copyPosition(visible);
   }
 
-  sample(now) {
-    const base = this.renderAlpha < 1
+  base() {
+    return this.renderAlpha < 1
       ? { ...this.predicted, ...lerpPosition(this.previous, this.predicted, this.renderAlpha) }
       : this.predicted;
+  }
+
+  sample(now) {
+    const base = this.base();
     if (!this.correction) return copyPosition(base);
     const progress = Math.max(0, Math.min(1, (now - this.correction.startedAt) / this.correctionMs));
     if (progress >= 1) {

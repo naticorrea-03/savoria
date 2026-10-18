@@ -6,14 +6,22 @@ import { prefersReducedMotion } from '../core/motion-math.js';
 const FLYER_POOL = 10;
 const FLIGHT_MS = 620;
 
-export function createHudMotion({ doc = document, tomatoSrc = 'assets/sprites/tomato.png' } = {}) {
+// counterId and tomatoesId pick the HUD: solo by default, or the shared
+// co-op counter. layerParentId must sit above the HUD it flies into.
+export function createHudMotion({
+  doc = document,
+  tomatoSrc = 'assets/sprites/tomato.png',
+  counterId = 'tomato-count',
+  tomatoesId = 'hud-tomatoes',
+  layerParentId = 'app',
+} = {}) {
   const reduced = () => prefersReducedMotion();
-  const counter = doc.getElementById('tomato-count');
-  const tomatoes = doc.getElementById('hud-tomatoes');
+  const counter = doc.getElementById(counterId);
+  const tomatoes = doc.getElementById(tomatoesId);
   const layer = doc.createElement('div');
   layer.className = 'fx-layer';
   layer.setAttribute('aria-hidden', 'true');
-  doc.getElementById('app')?.append(layer);
+  doc.getElementById(layerParentId)?.append(layer);
 
   const flyers = [];
   for (let index = 0; index < FLYER_POOL; index += 1) {

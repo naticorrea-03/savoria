@@ -17,7 +17,8 @@ test('motion uses the approved constants', () => {
     apexSpeedThreshold: 2.4,
     apexGravityMultiplier: 0.5,
     jumpSpeed: 12.5,
-    jumpCutSpeed: 6.5,
+    jumpCutSpeed: 4.2,
+    jumpCutRate: 30,
     coyoteSeconds: 0.12,
     jumpBufferSeconds: 0.13,
     airJumps: 1,
@@ -83,14 +84,75 @@ test('coyote time permits one jump after leaving ground', () => {
   assert.equal(next.coyote, 0);
 });
 
-test('releasing jump caps upward velocity at the approved cut speed', () => {
+test('releasing jump eases the rise toward the cut speed without a snap', () => {
+  const start = createPlayerMotion({ grounded: false, velocityY: 11 });
+  const next = stepPlayerMotion(
+    start,
+    { axis: 0, running: false, jumpHeld: false },
+    EMPTY_WORLD,
+    1 / 60,
+  );
+  assert.ok(next.velocityY < start.velocityY);
+  assert.ok(next.velocityY > DEFAULT_MOTION.jumpCutSpeed + 2);
+  let state = next;
+  for (let frame = 0; frame < 30; frame += 1) {
+    state = stepPlayerMotion(
+      state,
+      { axis: 0, running: false, jumpHeld: false },
+      EMPTY_WORLD,
+      1 / 60,
+    );
+  }
+  assert.ok(state.velocityY < DEFAULT_MOTION.jumpCutSpeed);
+});
+
+test('jump cut with rate 0 keeps the old hard clamp', () => {
   const next = stepPlayerMotion(
     createPlayerMotion({ grounded: false, velocityY: 11 }),
     { axis: 0, running: false, jumpHeld: false },
     EMPTY_WORLD,
     1 / 60,
+    { ...DEFAULT_MOTION, jumpCutRate: 0, jumpCutSpeed: 6.5 },
   );
-  assert.ok(next.velocityY <= DEFAULT_MOTION.jumpCutSpeed);
+  assert.ok(next.velocityY <= 6.5);
+});
+
+const FLOOR = { solids: [{ aabb: new AABB(0, -2.5, 0, 40, 5, 10) }] };
+
+function hopPeak(holdTicks, config) {
+  let state = createPlayerMotion({ grounded: true });
+  let peak = 0;
+  for (let frame = 0; frame < 120; frame += 1) {
+    state = stepPlayerMotion(
+      state,
+      { axis: 0, jumpPressed: frame === 0, jumpHeld: frame < holdTicks },
+      FLOOR,
+      1 / 60,
+      config,
+    );
+    peak = Math.max(peak, state.positionY);
+  }
+  return peak;
+}
+
+test('smooth jump cut keeps minimum and maximum jump heights within 0.05', () => {
+  const hardClamp = { ...DEFAULT_MOTION, jumpCutRate: 0, jumpCutSpeed: 6.5 };
+  assert.ok(Math.abs(hopPeak(0, DEFAULT_MOTION) - hopPeak(0, hardClamp)) <= 0.05);
+  assert.ok(Math.abs(hopPeak(1, DEFAULT_MOTION) - hopPeak(1, hardClamp)) <= 0.05);
+  assert.equal(hopPeak(200, DEFAULT_MOTION), hopPeak(200, hardClamp));
+});
+
+test('hop height grows steadily with how long jump is held', () => {
+  let previous = -1;
+  for (const ticks of [0, 1, 2, 4, 8, 12, 200]) {
+    const peak = hopPeak(ticks, DEFAULT_MOTION);
+    assert.ok(peak >= previous);
+    previous = peak;
+  }
+});
+
+test('jump cut is deterministic for identical input', () => {
+  assert.equal(hopPeak(3, DEFAULT_MOTION), hopPeak(3, { ...DEFAULT_MOTION }));
 });
 
 test('falling speed is capped', () => {

@@ -20,6 +20,7 @@ test('Python-only server runs Solo Adventure 1-1 without WebSockets or browser d
   await page.goto('/play/');
   await page.getByRole('button', { name: 'Solo Adventure' }).click();
   await page.getByRole('button', { name: /^Hungrio/ }).click();
+  await page.getByRole('button', { name: /^World 1, Pasta Plains/ }).click();
   await page.getByRole('button', { name: /1-1 Farfalle Fields/ }).click();
 
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'playing');

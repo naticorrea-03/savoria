@@ -369,9 +369,11 @@ export function compileSegments(def) {
       const len = 46;
       const x0 = x;
       x = groundRun(len);
-      out.boxes.push([x0 + 1, g + 3, 0, 2, 6, D, 'brick']);
+      // A low step marks the arena entrance (one jump clears it). The far
+      // wall is tall so a charge always ends in a wall bonk, never a fall.
+      out.boxes.push([x0 + 1, g + 0.8, 0, 2, 1.6, D, 'brick']);
       out.boxes.push([x - 1, g + 3, 0, 2, 6, D, 'brick']);
-      out.boss = { p: [x0 + len * 0.65, g + 2.4, 0], hp: 3, arena: [x0 + len / 2, g, 0, len - 8, D] };
+      out.boss = { p: [x0 + len * 0.65, g + 2, 0], hp: 6, arena: [x0 + len / 2, g, 0, len - 8, D] };
       coinsOver(x0 + 6, 4, g + 1.5, 2.2);
       coinsOver(x - 14, 4, g + 1.5, 2.2);
       out.items.push({ t: 'basil', p: [x0 + 5, g + 1.2, 0] });

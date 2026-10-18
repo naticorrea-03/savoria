@@ -55,6 +55,28 @@ export function titleProgressFor(save = createFreshSave()) {
   };
 }
 
+function worldOfLevel(levelId) {
+  return RELEASED_LEVELS.find(({ id }) => id === levelId)?.world ?? null;
+}
+
+function worldIsOpen(worldNumber, save) {
+  const firstIndex = RELEASED_LEVELS.findIndex(({ world }) => world === worldNumber);
+  return firstIndex >= 0 && firstIndex < save.unlocked;
+}
+
+// Where the map lands after a course. Finishing a world returns to world
+// select so the next world can unlock on screen; otherwise the course's map.
+function mapWorldAfterCourse(state, finished) {
+  const levelId = state.completion?.levelId ?? state.selectedLevelId;
+  const worldNumber = worldOfLevel(levelId);
+  if (worldNumber === null) return null;
+  if (finished && state.completion?.worldComplete) {
+    const nextWorld = RELEASED_WORLDS.find(({ n }) => n > worldNumber);
+    if (nextWorld && worldIsOpen(nextWorld.n, state.save)) return null;
+  }
+  return worldNumber;
+}
+
 function completionState(levelId) {
   const index = RELEASED_LEVELS.findIndex(({ id }) => id === levelId);
   const level = RELEASED_LEVELS[index];
@@ -97,6 +119,7 @@ export function initialUiState({
     save,
     selectedLevelId: null,
     selectedLevelIndex: null,
+    mapWorld: null,
     loadingPercent: 0,
     error: null,
     completion: null,
@@ -154,12 +177,19 @@ export function reduceUiState(state, event) {
       return {
         ...state,
         screen: 'world',
+        mapWorld: null,
         save: { ...state.save, chef: event.characterId },
         error: null,
       };
     }
     case 'BACK_TO_CHARACTERS':
       return { ...state, screen: 'characters', error: null };
+    case 'OPEN_WORLD':
+      if (state.screen !== 'world' || !worldIsOpen(event.world, state.save)) return state;
+      return state.mapWorld === event.world ? state : { ...state, mapWorld: event.world };
+    case 'BACK_TO_WORLDS':
+      if (state.screen !== 'world' || state.mapWorld === null) return state;
+      return { ...state, mapWorld: null };
     case 'SELECT_LEVEL': {
       const releasedIndex = RELEASED_LEVELS.findIndex(({ id }) => id === event.levelId);
       const isOpen = releasedIndex >= 0 && releasedIndex < state.save.unlocked;
@@ -169,6 +199,7 @@ export function reduceUiState(state, event) {
         screen: 'loading',
         selectedLevelId: event.levelId,
         selectedLevelIndex: releasedIndex,
+        mapWorld: RELEASED_LEVELS[releasedIndex].world,
         loadingPercent: 0,
         error: null,
         completion: null,
@@ -234,6 +265,7 @@ export function reduceUiState(state, event) {
       return {
         ...state,
         screen: 'world',
+        mapWorld: mapWorldAfterCourse(state, event.type === 'CONTINUE'),
         error: null,
         completion: null,
       };
@@ -310,7 +342,7 @@ function renderTitleHub(doc, state) {
     'title-current-course': `${progress.currentLevelId} ${progress.currentLevelName}`,
     'title-world-one-stars': `${progress.worldStars[1]}/6 stars`,
     'title-world-two-stars': sushiOpen ? `${progress.worldStars[2]}/9 stars` : 'Locked',
-    'title-world-three-stars': tacoOpen ? `${progress.worldStars[3]}/6 stars` : 'Locked',
+    'title-world-three-stars': tacoOpen ? `${progress.worldStars[3]}/9 stars` : 'Locked',
   };
   for (const [id, text] of Object.entries(copy)) {
     const element = doc.getElementById(id);
@@ -330,80 +362,6 @@ function renderTitleHub(doc, state) {
     chef.classList.toggle('is-selected', selected);
     chef.setAttribute('aria-current', selected ? 'true' : 'false');
   }
-}
-
-function makeLevelButton(doc, level, index, state) {
-  const open = index < state.save.unlocked;
-  const stars = state.save.best[level.id] ?? 0;
-  const button = doc.createElement('button');
-  button.type = 'button';
-  button.className = `level-node${open ? '' : ' locked'}${index === state.save.unlocked - 1 ? ' current' : ''}`;
-  button.disabled = !open;
-  button.dataset.action = 'select-level';
-  button.dataset.levelId = level.id;
-  button.dataset.levelIndex = String(index);
-  button.dataset.levelName = level.name;
-  if (open && index === Math.max(0, state.save.unlocked - 1)) {
-    button.dataset.primary = '';
-  }
-  button.setAttribute(
-    'aria-label',
-    open
-      ? `${level.id} ${level.name}, ${stars} of 3 stars`
-      : `${level.id} ${level.name}, locked`,
-  );
-  const id = doc.createElement('span');
-  id.className = 'nid';
-  id.textContent = open ? level.id : '🔒';
-  const rating = doc.createElement('span');
-  rating.className = 'nstars';
-  rating.setAttribute('aria-hidden', 'true');
-  rating.textContent = open ? (stars ? '⭐'.repeat(stars) : '·') : '';
-  button.append(id, rating);
-  return button;
-}
-
-function renderWorld(doc, state) {
-  const list = doc.getElementById('map-worlds');
-  if (!list) return;
-  const strips = RELEASED_WORLDS.map((world) => {
-    const levels = RELEASED_LEVELS
-      .map((level, index) => ({ level, index }))
-      .filter(({ level }) => level.world === world.n);
-    const stars = levels.reduce(
-      (total, { level }) => total + (state.save.best[level.id] ?? 0),
-      0,
-    );
-    const strip = doc.createElement('section');
-    strip.className = 'world-strip';
-    strip.style.backgroundImage = `url('${world.mapBackground ?? world.thumb}')`;
-    strip.setAttribute('aria-label', `World ${world.n}, ${world.name}`);
-
-    const badge = doc.createElement('div');
-    badge.className = 'world-badge';
-    const number = doc.createElement('span');
-    number.className = 'wnum';
-    number.textContent = String(world.n);
-    const name = doc.createElement('span');
-    name.className = 'wname';
-    name.append(world.name);
-    const cuisine = doc.createElement('small');
-    cuisine.textContent = world.cuisine;
-    name.append(cuisine);
-    const rating = doc.createElement('span');
-    rating.className = 'wstars';
-    rating.textContent = `⭐${stars}/${levels.length * 3}`;
-    badge.append(number, name, rating);
-
-    const nodes = doc.createElement('div');
-    nodes.className = 'level-nodes';
-    nodes.append(...levels.map(({ level, index }) => (
-      makeLevelButton(doc, level, index, state)
-    )));
-    strip.append(badge, nodes);
-    return strip;
-  });
-  list.replaceChildren(...strips);
 }
 
 function renderCompletion(doc, completion) {
@@ -520,7 +478,6 @@ export function renderUi(state, { doc = document, previousScreen = lastRenderedS
 
   renderTitleHub(doc, state);
   renderCharacters(doc, state);
-  renderWorld(doc, state);
   renderCompletion(doc, state.completion);
   renderError(doc, state.error);
 

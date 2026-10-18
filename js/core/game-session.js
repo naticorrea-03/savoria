@@ -4,9 +4,12 @@ import { AABB } from './aabb.js';
 import { buildChefSprite, animateChefSprite } from './chef-sprite.js';
 import { CameraFollow } from './camera-follow.js';
 import { FixedStepLoop } from './fixed-step-loop.js';
+import { PositionBlend } from './position-blend.js';
+import { BossPresenter } from './boss-presenter.js';
 import { SessionFx } from './session-fx.js';
 import { buildWorldScene } from './world-builder.js';
 import { updateBoss } from '../gameplay/boss.js';
+import { createBossFight } from '../gameplay/boss-fight.js';
 import { updateEntities } from '../gameplay/entities.js';
 import { InputState } from '../gameplay/input-state.js';
 import {
@@ -93,12 +96,14 @@ export class GameSession {
     this.checkpointFlag = this.sceneState.checkpointFlag;
     this.goalObject = this.sceneState.goalObject;
     this.bossState = this.sceneState.bossState;
+    if (this.bossState) this.bossState.fight = createBossFight(level.boss);
     this.randomState = this.sceneState.randomState;
     this.sun = this.sceneState.sun;
 
     this.input = new InputState();
     this.previousPos = new THREE.Vector3(...level.spawn);
     this.renderPos = new THREE.Vector3();
+    this.entityBlend = new PositionBlend();
     this.cameraFollow = new CameraFollow();
     this.loop = new FixedStepLoop({ step: 1 / 60, maxSteps: 5 });
     this.projectiles = [];
@@ -115,6 +120,16 @@ export class GameSession {
 
     this.buildPlayer();
     this.fx = new SessionFx({ THREE, session: this });
+    this.bossPresenter = this.bossState
+      ? new BossPresenter({
+        THREE,
+        scene: this.scene,
+        visual: this.bossState,
+        pool: this.fx.pool,
+        shake: this.fx.shake,
+        smoothing: 28,
+      })
+      : null;
     this.attachInput();
 
     this.onResize = () => {
@@ -228,6 +243,7 @@ export class GameSession {
   simulate(dt) {
     const player = this.player;
     this.previousPos.copy(player.pos);
+    this.entityBlend.remember(this.blendedObjects());
     this.elapsed += dt;
     this.time -= dt;
     if (this.time <= 0) {
@@ -322,15 +338,32 @@ export class GameSession {
         mover.previousPos[2] + (mover.simPos[2] - mover.previousPos[2]) * alpha,
       );
     }
+    this.entityBlend.blend(alpha);
     animateChefSprite(this.rig, player, this.elapsed);
     this.updateShadow();
     if (this.glow.visible) this.glow.position.copy(player.pos).y += 0.9;
     this.updateCamera(seconds);
-    this.fx.update(fxSeconds);
+    // The boss presenter's slow-mo only scales presentation time. The fixed
+    // step above keeps simulating at full speed, same as the co-op server.
+    const fxScale = this.bossPresenter?.timeScale ?? 1;
+    this.bossPresenter?.update(fxSeconds, this.bossState?.fight);
+    this.fx.update(fxSeconds * fxScale);
     this.fx.beginRender(this.renderer);
+    this.bossPresenter?.applyCamera(this.camera);
     this.renderer.render(this.scene, this.camera);
+    this.bossPresenter?.restoreCamera(this.camera);
     this.fx.endRender();
+    this.entityBlend.restore();
     player.pos.copy(simulated);
+  }
+
+  // Everything that steps at 60 Hz and is drawn between steps.
+  blendedObjects() {
+    const objects = [];
+    for (const enemy of this.enemies) if (!enemy.dead) objects.push(enemy.sprite);
+    for (const projectile of this.projectiles) objects.push(projectile.m);
+    // The boss presenter draws the boss from fight state with its own smoothing.
+    return objects;
   }
 
   applyMotion(motion) {
@@ -621,6 +654,7 @@ export class GameSession {
     this.raf = 0;
     removeEventListener('resize', this.onResize);
     this.detachInput();
+    this.bossPresenter?.dispose();
     this.fx.dispose();
     this.sceneState.dispose();
     for (const child of [...this.scene.children]) this.disposeObject(child);

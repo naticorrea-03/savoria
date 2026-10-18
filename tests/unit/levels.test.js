@@ -19,20 +19,20 @@ function snapshotLevel(definition) {
   };
 }
 
-test('release exposes seven courses across Pasta Plains, Sushi Shores, and Taco Territory', () => {
+test('release exposes eight courses across Pasta Plains, Sushi Shores, and Taco Territory', () => {
   assert.deepEqual(RELEASED_WORLDS.map((world) => world.n), [1, 2, 3]);
   assert.deepEqual(
     RELEASED_LEVELS.map((level) => level.id),
-    ['1-1', '1-2', '2-1', '2-2', '2-3', '3-1', '3-2'],
+    ['1-1', '1-2', '2-1', '2-2', '2-3', '3-1', '3-2', '3-3'],
   );
 });
 
-test('every released level validates and compiles to a goal', () => {
+test('every released level validates and compiles to a goal or a boss', () => {
   for (const definition of RELEASED_LEVELS) {
     assert.deepEqual(validateLevelDefinition(definition), []);
     const level = buildReleasedLevel(definition);
     assert.ok(level.length > 40);
-    assert.ok(level.goal);
+    assert.ok(level.goal || level.boss);
     assert.ok(level.spawn);
   }
 });
