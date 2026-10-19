@@ -128,6 +128,30 @@ function createWorldTools(THREE) {
     });
   }
 
+  // Tiles a face at a fixed world size, anchored to the top edge, so layered
+  // art keeps its proportions on any box. `fromTop` continues the pattern
+  // below an earlier plane instead of restarting it.
+  function tiledFaceMaterial(textures, path, tile, width, height, worldLeft, {
+    fromTop = 0,
+    tint = 0xffffff,
+  } = {}) {
+    const map = textures.clone(path);
+    map.wrapS = THREE.RepeatWrapping;
+    map.wrapT = THREE.RepeatWrapping;
+    const repeatY = height / tile.height;
+    map.repeat.set(width / tile.width, repeatY);
+    map.offset.set(worldLeft / tile.width, 1 - fromTop / tile.height - repeatY);
+    map.needsUpdate = true;
+    return new THREE.MeshBasicMaterial({
+      map,
+      color: tint ?? 0xffffff,
+      transparent: true,
+      alphaTest: 0.02,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+  }
+
   function addTerrainVisual(mesh, textures, kind, w, h, d, manifest) {
     const visual = terrainVisualFor(kind, manifest);
     const isPlatform = kind === 'plat' || kind === 'brick';
@@ -141,15 +165,20 @@ function createWorldTools(THREE) {
       faceHeight,
     );
     const worldLeft = mesh.position.x - visualWidth / 2;
+    const tile = visual.faceTile;
     const face = new THREE.Mesh(
       new THREE.PlaneGeometry(visualWidth, faceHeight),
-      visualMaterial(textures, visual.face, faceUv, {
-        tint: visual.tint,
-        removeLightNeutral: visual.removeLightNeutral,
-        tileWidth,
-        width: visualWidth,
-        worldLeft,
-      }),
+      tile
+        ? tiledFaceMaterial(textures, visual.face, tile, visualWidth, faceHeight, worldLeft, {
+          tint: visual.tint,
+        })
+        : visualMaterial(textures, visual.face, faceUv, {
+          tint: visual.tint,
+          removeLightNeutral: visual.removeLightNeutral,
+          tileWidth,
+          width: visualWidth,
+          worldLeft,
+        }),
     );
     face.position.set(0, h / 2 - faceHeight / 2, terrainPlaneZ(d, visual.faceDepth, manifest));
     mesh.add(face);
@@ -157,12 +186,17 @@ function createWorldTools(THREE) {
     if (visual.skirtDepth) {
       const skirt = new THREE.Mesh(
         new THREE.PlaneGeometry(visualWidth, visual.skirtDepth),
-        visualMaterial(textures, visual.face, faceUv, {
-          tint: visual.skirtTint,
-          tileWidth,
-          width: visualWidth,
-          worldLeft,
-        }),
+        tile
+          ? tiledFaceMaterial(textures, visual.face, tile, visualWidth, visual.skirtDepth, worldLeft, {
+            fromTop: faceHeight,
+            tint: visual.skirtTint,
+          })
+          : visualMaterial(textures, visual.face, faceUv, {
+            tint: visual.skirtTint,
+            tileWidth,
+            width: visualWidth,
+            worldLeft,
+          }),
       );
       skirt.position.set(
         0,

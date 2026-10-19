@@ -105,6 +105,11 @@ test('world map: intro, unlock reveal, walking chef, and a staged course clear',
   await expect(page.locator('.cine-course-card')).toContainText('Farfalle Fields');
 
   // Goal: the world celebrates first, the card waits, any key skips ahead.
+  // Hold the beat open so a slow CI machine can't let it finish before the
+  // checks below run; the skip key still has to end it.
+  await page.evaluate(async () => {
+    (await import('/js/ui/cinematics.js')).TIMING.goalBeatMs = 60_000;
+  });
   await page.evaluate(() => {
     const session = window.__savoriaTest.session;
     session.player.pos.copy(session.goalObject.position);

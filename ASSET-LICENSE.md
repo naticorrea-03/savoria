@@ -6,7 +6,7 @@ The following original Savoria materials are licensed under [Creative Commons At
 - Original generated image files in `assets/home/`, `assets/world1/`, and `assets/world2/`.
 - Synthesized audio rendered by `js/audio/sfx.js`.
 
-The `assets/home/`, `assets/world1/`, and `assets/world2/` stills were generated for Savoria on 2026-08-29. Existing Savoria artwork served as internal art-direction references. The generated stills contain no Nintendo artwork, characters, or logos.
+The `assets/home/`, `assets/world1/`, and `assets/world2/` stills were generated for Savoria on 2026-08-29. Existing Savoria artwork served as internal art-direction references. The generated stills contain no Nintendo artwork, characters, or logos. `assets/world2/world-map-background.png` was regenerated at 1672x941 on 2026-10-19 from the earlier 640x360 version.
 
 `assets/sprites/savoria_logo.png` and its artwork are excluded from this CC license. The Savoria name, wordmark, and logo are reserved. No trademark rights are granted.
 

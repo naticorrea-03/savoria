@@ -7,8 +7,10 @@ const ground = {
   face: art('ground_face'),
   edge: art('cliff_edge'),
   edgeWidth: 0.65,
-  faceUv: { offsetX: 0, offsetY: 0, repeatX: 1, repeatY: 1 },
-  sourceAspect: 1672 / 941,
+  // The face art is three stacked taco layers that tile in both directions.
+  // Tiling at a fixed world size keeps the layers from squashing on short
+  // ground or restarting in the skirt below it.
+  faceTile: { width: 7.2 * (1672 / 941), height: 7.2 },
   skirtDepth: 6,
   skirtTint: 0xb88059,
   capDepth: 0.52,
